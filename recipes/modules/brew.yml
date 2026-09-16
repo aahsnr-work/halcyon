@@ -1,0 +1,11 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        test -f /usr/share/homebrew.tar.zst                      # base brew payload intact (untouched!)
+        test -f /usr/share/ublue-os/homebrew/halcyon.Brewfile
+        test "$(grep -c '^brew ' /usr/share/ublue-os/homebrew/halcyon.Brewfile)" -eq 21
+        test -f /usr/lib/systemd/user/halcyon-brew-bundle.service

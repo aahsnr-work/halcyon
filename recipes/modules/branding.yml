@@ -1,0 +1,20 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: os-release
+    properties:
+      NAME: halcyon
+      PRETTY_NAME: halcyon (Bazzite fork)
+      HOME_URL: https://github.com/aahsnr-work/halcyon
+      # ID/ID_LIKE intentionally untouched (fedora-compatible; §1.19k)
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        grep -q 'PRETTY_NAME="halcyon' /etc/os-release
+        if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+          plymouth-set-default-theme halcyon || plymouth-set-default-theme spinner || true
+        fi
+        test -f /etc/motd.d/halcyon-motd.txt
+        test -d /usr/share/backgrounds/halcyon

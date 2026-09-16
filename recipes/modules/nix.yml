@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: files
+    files:
+      - source: nix-tmpfiles
+        destination: /usr/lib/tmpfiles.d/
+      - source: nix-profile
+        destination: /etc/profile.d/
+
+  - type: systemd
+    system:
+      enabled:
+        - var-nix.service
+        - nix.mount
+
+  - type: dnf
+    install:
+      install-weak-deps: false     # winter omits this; halcyon constraint #6 adds it (§11 #4)
+      packages:
+        - nix
+        - nix-daemon               # nix multi-user/systemd install
+
+  - type: systemd
+    system:
+      enabled:
+        - nix-daemon

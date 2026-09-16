@@ -1,0 +1,7 @@
+[Plymouth Theme]
+Name=halcyon
+Description=halcyon boot theme (TODO(user): replace with branded assets)
+ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/halcyon

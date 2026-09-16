@@ -1,0 +1,53 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: script@v1
+    snippets:
+      - dnf5 config-manager setopt terra.enabled=1   # pre-existing base repo, temporarily enabled (§1.11)
+
+  - type: dnf
+    repos:
+      cleanup: true
+      files:
+        - vscode.repo            # resolved from files/dnf/vscode.repo
+        - https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
+      keys:
+        - https://packages.microsoft.com/keys/microsoft.asc
+        - https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
+      copr:
+        - sneexy/zen-browser
+    install:
+      install-weak-deps: false
+      skip-unavailable: true     # guards brave-origin availability windows
+      packages:                  # PLAIN names only (§1.21) — all six are unique across enabled repos
+        - code
+        - brave-browser
+        - brave-origin
+        - zen-browser
+        - zed
+        - emacs-pgtk             # Fedora official (doom-setup needs Emacs)
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        dnf5 config-manager setopt terra.enabled=0    # restore base state (§1.11)
+        rm -f /etc/yum.repos.d/_copr_sneexy_zen-browser.repo
+        command -v code brave zen-browser zed emacs
+        # provenance (§1.21): each package from its intended repo
+        dnf -q repoquery --installed --qf '%{name} from %{reponame}' code brave-browser zen-browser zed emacs-pgtk
+        rpm -q brave-origin || echo 'NOTE: brave-origin unavailable this run (skip-unavailable)'
+        # /opt auto-relocation check (CLI >= v0.9.23, §1.19o):
+        ls -d /usr/lib/opt/brave.com 2>/dev/null || ls -d /opt/brave.com 2>/dev/null \
+          || { echo 'ERROR: brave /opt content missing — check BlueBuild CLI version'; exit 1; }
+        ls /usr/lib/tmpfiles.d/ | grep -i brave || true
+        # repo hygiene gates
+        dnf5 repolist --enabled | grep -Ei 'brave|^code|zen|terra' && { echo 'ERROR: repo cleanup failed'; exit 1; } || true
+        ls /etc/yum.repos.d/ | grep -Ei 'brave|vscode|_copr_sneexy' && { echo 'ERROR: repo file left behind'; exit 1; } || true
+
+  # Extension point for additional user-managed apps (plain names only, never repo-scoped)
+  - type: dnf
+    install:
+      install-weak-deps: false
+      packages: []
+        # TODO(user): add your custom application RPM packages here (plain names only, never repo-scoped)

@@ -1,0 +1,31 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/recipe-v1.json
+# image will be published to ghcr.io/aahsnr-work/halcyon
+name: halcyon
+description: >-
+  Lean Hyprland gaming desktop forked from Bazzite (GNOME removed;
+  Hyprland + Noctalia; NVIDIA open drivers inherited; curated dev tooling).
+
+base-image: ghcr.io/ublue-os/bazzite-gnome-nvidia-open
+image-version: latest
+platforms:
+  - linux/amd64
+
+labels:
+  halcyon.base: bazzite-gnome-nvidia-open
+  halcyon.desktop: hyprland-noctalia
+
+modules:
+  # ORDER IS SIGNIFICANT — removals first (constraint 5), services/branding last.
+  - from-file: modules/removals.yml
+  - from-file: modules/desktop.yml
+  - from-file: modules/apps.yml
+  - from-file: modules/fonts.yml
+  - from-file: modules/flatpaks.yml
+  - from-file: modules/nix.yml
+  - from-file: modules/brew.yml
+  - from-file: modules/build-scripts.yml
+  - from-file: modules/files.yml
+  - from-file: modules/services.yml
+  - from-file: modules/branding.yml
+  - type: signing

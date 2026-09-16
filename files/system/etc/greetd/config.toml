@@ -1,0 +1,9 @@
+[terminal]
+vt = 1
+
+[general]
+source_profile = true
+
+[default_session]
+command = "tuigreet --time --remember --remember-user-session --asterisks --cache /var/cache/tuigreet --sessions /usr/share/wayland-sessions --cmd Hyprland"
+user = "greetd"

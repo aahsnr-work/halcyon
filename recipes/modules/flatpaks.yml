@@ -1,0 +1,36 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: default-flatpaks@v1
+    notify: true
+    system:
+      # repo-url/repo-name omitted → Flathub defaults (tsp-verified)
+      install:
+        - com.ranfdev.DistroShelf          # v4: system flatpak replaces the stage-built RPM
+        - com.github.tchx84.Flatseal
+        - org.onlyoffice.desktopeditors
+        - com.bitwarden.desktop
+        - com.ticktick.TickTick
+      remove:                        # base GNOME set (§1.8) minus Flatseal & DistroShelf
+        - org.mozilla.firefox
+        - com.mattjakeman.ExtensionManager
+        - com.github.Matoking.protontricks
+        - io.github.flattool.Warehouse
+        - io.missioncenter.MissionCenter
+        - com.vysp3r.ProtonPlus
+        - org.gnome.Calculator
+        - org.gnome.Calendar
+        - org.gnome.Characters
+        - org.gnome.Contacts
+        - org.gnome.Papers
+        - org.gnome.Logs
+        - org.gnome.Loupe
+        - org.gnome.NautilusPreviewer
+        - org.gnome.TextEditor
+        - org.gnome.Weather
+        - org.gnome.baobab
+        - org.gnome.clocks
+        - org.gnome.font-viewer
+        - org.gnome.Showtime
+        - org.gnome.Firmware
+        - page.tesk.Refine

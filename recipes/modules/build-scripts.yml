@@ -1,0 +1,31 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: dnf
+    install:
+      install-weak-deps: false
+      skip-unavailable: true
+      packages:
+        - gcc        # pyprland's optional C helper (removed again below)
+        - perl       # tlmgr — NOT in base (Containerfile audit); KEPT for runtime tlmgr
+        - jq         # install-obsidian.sh / install-pyprland.sh — base presence unconfirmed; KEPT (tiny)
+        - python3    # venv base (python3-pip IS in base → likely present; idempotent)
+
+  - type: script@v1
+    scripts:           # official mechanism: executes files/scripts/*.sh ($CONFIG_DIRECTORY/scripts)
+      - install-obsidian.sh
+      - install-zotero.sh
+      - install-pyprland.sh
+      - install-texlive.sh
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        test -x /usr/bin/obsidian && test -f /usr/share/applications/obsidian.desktop
+        ldd /usr/lib/obsidian/obsidian 2>/dev/null | grep -i 'not found' && { echo 'ERROR: obsidian electron deps missing'; exit 1; } || true
+        test -x /usr/bin/zotero && grep -q DisableAppUpdate /usr/lib/zotero/distribution/policies.json
+        test -x /usr/bin/pypr && test -f /usr/lib/systemd/user/pyprland.service
+        test -d /usr/lib/texlive && test -f /etc/profile.d/texlive.sh
+        dnf -y remove gcc || true          # build-only tooling
+        rpm -q perl python3 jq             # deliberately KEPT (documented in README)

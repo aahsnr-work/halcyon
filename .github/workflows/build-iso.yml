@@ -1,0 +1,32 @@
+name: build-iso
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  generate-iso:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install BlueBuild CLI (>= v0.9.23 required for /opt handling; latest v0.9.37)
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/blue-build/cli/main/install.sh | sudo bash
+          bluebuild --version
+
+      - name: Generate ISO from the published halcyon image (run after a green build.yml)
+        run: |
+          sudo bluebuild generate-iso --iso-name halcyon.iso image ghcr.io/aahsnr-work/halcyon
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: halcyon-iso
+          path: halcyon.iso
+          if-no-files-found: error

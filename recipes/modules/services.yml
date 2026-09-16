@@ -1,0 +1,17 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: systemd
+    system:
+      enabled:
+        - greetd.service
+      masked:
+        - sddm.service                 # base DM (§1.1); RPM may survive if dep-gated (§5.1C) — mask covers both
+        - gdm.service                  # base already disables; mask hardens
+        - bazzite-autologin.service    # deck-only unit (§1.2); mask in case files linger
+        - nvidia-persistenced.service  # user requirement (disabled in base)
+        - nvidia-powerd.service        # user requirement (ENABLED in base — real change, §1.13)
+    user:                              # systemctl --global
+      enabled:
+        - pyprland.service             # from install-pyprland.sh (§6.3)
+        - halcyon-brew-bundle.service  # §7.3

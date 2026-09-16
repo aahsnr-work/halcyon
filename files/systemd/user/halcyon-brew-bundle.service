@@ -1,0 +1,18 @@
+[Unit]
+Description=Install halcyon Homebrew formulas (once, at first login)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/home/linuxbrew/.linuxbrew/bin/brew
+ConditionPathExists=!%h/.config/halcyon/.brew-bundle-done
+
+[Service]
+Type=oneshot
+Environment=HOMEBREW_NO_AUTO_UPDATE=1
+Environment=HOMEBREW_NO_ANALYTICS=1
+Environment=HOMEBREW_NO_ENV_HINTS=1
+ExecStartPre=/usr/bin/mkdir -p %h/.config/halcyon
+ExecStart=/home/linuxbrew/.linuxbrew/bin/brew bundle --no-lock --file /usr/share/ublue-os/homebrew/halcyon.Brewfile
+ExecStartPost=/usr/bin/touch %h/.config/halcyon/.brew-bundle-done
+
+[Install]
+WantedBy=default.target

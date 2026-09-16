@@ -1,0 +1,41 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: dnf
+    repos:
+      cleanup: true                      # disables the COPR after install; file purged below
+      copr:
+        - lionheartp/Hyprland
+    install:
+      install-weak-deps: false
+      skip-unavailable: true
+      packages:                          # PLAIN names — deps resolve from fedora+updates+COPR
+        - hyprland-git                   # only in lionheartp COPR
+        - noctalia-git                   # only in lionheartp COPR
+        - hyprpolkitagent
+        - hyprland-qt-support
+        - greetd
+        - greetd-tuigreet
+        - xdg-desktop-portal-hyprland
+        - xdg-desktop-portal-gtk
+        - qt6-qtwayland
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        rm -f /etc/yum.repos.d/_copr_lionheartp_Hyprland.repo   # full T17 hygiene (§1.19d)
+        rpm -q hyprland-git noctalia-git greetd greetd-tuigreet xdg-desktop-portal-hyprland
+        # -git stack ABI consistency guard (§1.15):
+        ldd /usr/bin/Hyprland 2>/dev/null | grep -i 'not found' && { echo 'ERROR: hyprland -git ABI break'; exit 1; } || true
+        # provenance guard: hyprland-git's companion libs must come from the COPR, not Fedora stable
+        dnf -q repoquery --installed --qf '%{name} from %{reponame}' \
+          hyprland-git noctalia-git hyprgraphics hyprlang aquamarine hyprcursor hyprutils || true
+        for p in hyprgraphics hyprlang aquamarine hyprcursor; do
+          rpm -q "$p" >/dev/null 2>&1 || continue
+          dnf -q repoquery --installed --qf '%{reponame}' "$p" | grep -q 'lionheartp' \
+            || { echo "ERROR: $p resolved outside lionheartp COPR — mixed -git stack risk (§1.15). Remediation: re-run with the COPR repo file priority raised (dnf5 config-manager setopt '*lionheartp*'.priority=1) between copr-enable and install, via two dnf module entries + interleaved script."; exit 1; }
+        done
+        test -f /usr/share/wayland-sessions/hyprland.desktop
+        id greetd    # Fedora greetd sysusers (spec-verified §1.18); hard gate for §7.1 config
+        dnf5 repolist --enabled | grep -Ei 'lionheartp' && { echo 'ERROR: COPR still enabled'; exit 1; } || true

@@ -1,0 +1,291 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        echo "=== Step A: Inventory Detection ==="
+        mkdir -p /tmp
+        INVENTORY="/tmp/halcyon-inventory.txt"
+        {
+          echo "--- HALCYON BUILD INVENTORY ---"
+          date
+          echo "=== Bloat candidate check ==="
+          rpm -qa | grep -Ei 'inputplumber|powerstation|jupiter|steamdeck|galileo|powerbuttond|vpower|sdgyrodsu|hid-replay|waydroid|fastfetch|gnome-shell|gdm|mutter|firefox' || true
+          echo "=== Font packages ==="
+          rpm -qa '*fonts*' || true
+          echo "=== Repo files in /etc/yum.repos.d/ ==="
+          ls -la /etc/yum.repos.d/ || true
+          echo "=== Enabled dnf5 repos ==="
+          dnf5 repolist --enabled 2>/dev/null || true
+          echo "=== Flatpak remotes ==="
+          ls -la /etc/flatpak/remotes.d/ 2>/dev/null || true
+          echo "=== Kept core packages ==="
+          rpm -q bazaar bazzite-portal scx-scheds scx-tools steamos-manager jq perl python3 2>/dev/null || true
+          echo "=== Service status ==="
+          for s in sddm gdm nvidia-powerd nvidia-persistenced scx_loader inputplumber bazzite-autologin brew-setup bazzite-flatpak-manager; do
+            echo "$s: $(systemctl is-enabled "$s.service" 2>&1 || true)"
+          done
+          echo "=== Homebrew assets ==="
+          ls -la /usr/share/homebrew* 2>/dev/null || true
+          echo "=== Useradd default shell ==="
+          grep ^SHELL /etc/default/useradd 2>/dev/null || true
+          echo "=== Directory GNOME extensions ==="
+          ls -la /usr/share/gnome-shell/extensions/ 2>/dev/null || true
+          echo "=== What requires check ==="
+          for p in sddm cage steamos-manager gnome-settings-daemon; do
+            echo "whatrequires $p: $(dnf -q repoquery --installed --whatrequires "$p" 2>/dev/null || true)"
+          done
+        } | tee "$INVENTORY"
+
+  - type: dnf
+    remove:
+      auto-remove: true
+      packages:
+        - nautilus-gsconnect
+        - gnome-shell-extension-gsconnect
+        - gnome-shell-extension-user-theme
+        - gnome-search-yafti
+        - gnome-rounded-blur
+        - firewall-config
+        - ibus-mozc
+        - ibus-pinyin
+        - ibus-table-chinese-cangjie
+        - ibus-table-chinese-quick
+        - inputplumber
+        - steamos-manager-powerstation
+        - jupiter-fan-control
+        - jupiter-hw-support-btrfs
+        - galileo-mura
+        - steamdeck-dsp
+        - powerbuttond
+        - vpower
+        - sdgyrodsu
+        - hid-replay
+        - steamdeck-backgrounds
+        - steamdeck-gnome-presets
+        - waydroid
+        - fastfetch
+        - firefox
+        - firefox-langpacks
+        - gnome-shell
+        - mutter
+        - gdm
+        - gnome-session
+        - gnome-session-wayland-session
+        - nautilus
+        - ptyxis
+        - gnome-control-center
+        - gnome-settings-daemon
+        - gjs
+        - xdg-desktop-portal-gnome
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        echo "=== Step C: Guarded removals and verification ==="
+        CANDIDATES=(
+          gnome-classic-session
+          gnome-classic-session-xsession
+          gnome-terminal
+          gnome-console
+          gnome-text-editor
+          evince
+          loupe
+          snapshot
+          totem
+          gnome-calculator
+          gnome-calendar
+          gnome-characters
+          gnome-clocks
+          gnome-connections
+          gnome-contacts
+          gnome-font-viewer
+          gnome-logs
+          gnome-maps
+          gnome-remote-desktop
+          gnome-system-monitor
+          gnome-tour
+          gnome-weather
+          gnome-initial-setup
+          gnome-extensions-app
+          gnome-software
+          baobab
+          simple-scan
+          yelp
+          malcontent-control
+          gnome-bluetooth
+          jupiter-sd-mounting-btrfs
+          ds-inhibit
+          plasma-login-manager
+          hhd
+          hhd-ui
+          decky-loader
+          bluebubbles
+          gnome-shell-extension-apps-menu
+          gnome-shell-extension-auto-move-windows
+          gnome-shell-extension-launch-new-instance
+          gnome-shell-extension-places-menu
+          gnome-shell-extension-window-list
+          mozilla-filesystem
+        )
+
+        KEEPERS_REGEX='steamos-manager|gamescope|steam|bazaar|bazzite-portal|umu-launcher|lutris|gamemode|scx-scheds|scx-tools'
+        if rpm -q sddm >/dev/null 2>&1; then
+          sddm_reqs=$(dnf -q repoquery --installed --whatrequires sddm 2>/dev/null || true)
+          if echo "$sddm_reqs" | grep -Eq "$KEEPERS_REGEX"; then
+            echo "Keeping sddm (required by keeper: $sddm_reqs)"
+          else
+            CANDIDATES+=(sddm)
+          fi
+        fi
+
+        if rpm -q cage >/dev/null 2>&1; then
+          cage_reqs=$(dnf -q repoquery --installed --whatrequires cage 2>/dev/null || true)
+          if echo "$cage_reqs" | grep -Eq "$KEEPERS_REGEX"; then
+            echo "Keeping cage (required by keeper: $cage_reqs)"
+          else
+            CANDIDATES+=(cage)
+          fi
+        fi
+
+        present=()
+        for c in "${CANDIDATES[@]}"; do
+          if rpm -q "$c" >/dev/null 2>&1; then
+            present+=("$c")
+          fi
+        done
+
+        if [ ${#present[@]} -gt 0 ]; then
+          echo "Removing present candidates: ${present[*]}"
+          dnf -y remove "${present[@]}" || true
+        fi
+
+        # Hard-fail verification: assert ABSENT
+        for pkg in gnome-shell gdm mutter waydroid fastfetch firefox inputplumber steamos-manager-powerstation steamdeck-gnome-presets jupiter-fan-control; do
+          if rpm -q "$pkg" >/dev/null 2>&1; then
+            echo "ERROR: Package $pkg is still present (expected ABSENT)" >&2
+            exit 1
+          fi
+        done
+
+        # Hard-fail verification: assert PRESENT
+        for pkg in steamos-manager bazaar bazzite-portal steam gamescope-session-ogui-steam terra-gamescope umu-launcher lutris gamemode scx-scheds scx-tools usbip xwiimote-ng input-remapper distroshelf-helper; do
+          if ! rpm -q "$pkg" >/dev/null 2>&1; then
+            echo "ERROR: Package $pkg is missing (expected PRESENT)" >&2
+            exit 1
+          fi
+        done
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        echo "=== Step D: File footprint + service/justfile pruning ==="
+
+        # 1. Waydroid set
+        rm -f /etc/default/waydroid-launcher \
+              /usr/bin/waydroid-launcher \
+              /usr/bin/waydroid-choose-gpu \
+              /usr/libexec/waydroid-container-start \
+              /usr/libexec/waydroid-container-stop \
+              /usr/libexec/waydroid-container-restart \
+              /usr/libexec/waydroid-fix-controllers \
+              /usr/share/applications/waydroid-container-restart.desktop \
+              /usr/share/polkit-1/actions/org.bazzite.waydroid.policy \
+              /usr/share/polkit-1/rules.d/30-waydroid.rules || true
+        rm -rf /usr/share/applications/Waydroid* /usr/share/waydroid-extra || true
+
+        # 2. Bling set
+        rm -f /usr/libexec/bazzite-bling-fastfetch \
+              /usr/share/ublue-os/bazzite/fastfetch.jsonc \
+              /usr/share/bazzite-cli/bling.sh \
+              /usr/share/bazzite-cli/bling.fish \
+              /etc/profile.d/bazzite-neofetch.sh || true
+
+        if [ -f /usr/share/ublue-os/just/80-bazzite.just ]; then
+          sed -i '/# Enable a Bluefin-style CLI experience/,/\[group(/ { /\[group(/!d }' /usr/share/ublue-os/just/80-bazzite.just || true
+        fi
+
+        # 3. GNOME config footprint
+        rm -f /etc/dconf/db/distro.d/00-bazzite-desktop-silverblue-global \
+              /etc/dconf/db/distro.d/01-bazzite-desktop-silverblue-folders \
+              /etc/dconf/db/distro.d/locks/00-bazzite-desktop-silverblue-global-lock \
+              /usr/share/glib-2.0/schemas/zz0-00-bazzite-desktop-silverblue-base.gschema.override \
+              /usr/share/glib-2.0/schemas/zz0-01-bazzite-desktop-silverblue-power.gschema.override \
+              /usr/share/glib-2.0/schemas/zz0-02-bazzite-desktop-silverblue-privacy.gschema.override \
+              /usr/share/glib-2.0/schemas/zz0-03-bazzite-desktop-silverblue-sound.gschema.override \
+              /usr/share/glib-2.0/schemas/zz0-04-bazzite-desktop-silverblue-folders.gschema.override \
+              /usr/lib/systemd/system/dconf-update.service \
+              /usr/share/ublue-os/motd/tips/30-gnome.md \
+              /usr/share/applications/gnome-ssh-askpass.desktop \
+              /usr/share/ublue-os/firefox-config/03-bazzite-gnome.js \
+              /etc/skel/.config/gnome-initial-setup-done || true
+        rm -rf /usr/share/gnome-background-properties/ \
+               /etc/skel/.local/share/org.gnome.Ptyxis/ || true
+        rm -f /usr/share/backgrounds/default.jxl /usr/share/backgrounds/default-dark.jxl || true
+
+        if [ -f /etc/xdg/mimeapps.list ]; then
+          sed -i '/org\.gnome\./d' /etc/xdg/mimeapps.list || true
+        fi
+
+        # 4. SDDM/autologin
+        rm -rf /etc/sddm.conf.d
+
+        # 5. Dangling service hygiene
+        for unit in inputplumber.service powerstation.service jupiter-fan-control.service vpower.service jupiter-biosupdate.service jupiter-controller-update.service sdgyrodsu.service waydroid-container.service bazzite-autologin.service dconf-update.service; do
+          systemctl disable "$unit" 2>/dev/null || true
+        done
+        systemctl --global disable sdgyrodsu.service 2>/dev/null || true
+        systemctl --global disable steamos-powerbuttond.service 2>/dev/null || true
+        rm -f /usr/lib/systemd/user/gamescope-session-plus@ogui-steam.service.wants/steamos-powerbuttond.service || true
+        find /etc/systemd /usr/lib/systemd -name '*.wants' -type d -exec find {} -xtype l -delete \; 2>/dev/null || true
+
+        # 6. Justfiles pruning
+        for jf in 82-bazzite-waydroid.just 91-bazzite-decky.just 95-bazzite-deck-session.just 90-bazzite-de.just; do
+          rm -f "/usr/share/ublue-os/just/$jf" "/usr/share/ublue-os/just/deck-$jf" || true
+          if [ -f /usr/share/ublue-os/justfile ]; then
+            sed -i "\|import.*$jf|d" /usr/share/ublue-os/justfile || true
+          fi
+        done
+
+        # 7. steamos-manager patch
+        if [ -f /usr/share/steamos-manager/platform.toml ]; then
+          sed -i 's/desktop = "gnome.desktop"/desktop = "hyprland.desktop"/' /usr/share/steamos-manager/platform.toml || true
+        fi
+
+        # 8. useradd shell
+        grep -q '^SHELL=/bin/bash' /etc/default/useradd 2>/dev/null || sed -i 's|^SHELL=.*|SHELL=/bin/bash|' /etc/default/useradd 2>/dev/null || true
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        echo "=== Step E: Directory-installed GNOME extensions ==="
+        rm -rf /usr/share/gnome-shell/extensions
+        glib-compile-schemas /usr/share/glib-2.0/schemas || true
+        rm -f /etc/dconf/db/local.d/*bazzite* /etc/dconf/db/local.d/*gnome* 2>/dev/null || true
+        [ -d /etc/dconf/db/local.d ] && dconf update || true
+
+  - type: script@v1
+    snippets:
+      - |
+        set -euo pipefail
+        echo "=== Step F: Pruning fonts safely ==="
+        PROTECT_REGEX="fontconfig|fontpackages|dejavu-sans-fonts|dejavu-sans-mono-fonts"
+        for pkg in $(rpm -qa '*fonts*' 2>/dev/null || true); do
+          if echo "$pkg" | grep -Eq "$PROTECT_REGEX"; then
+            echo "Keeping protected font package: $pkg"
+            continue
+          fi
+          reqs=$(dnf -q repoquery --installed --whatrequires "$pkg" 2>/dev/null || true)
+          if [ -z "$reqs" ]; then
+            echo "Removing zero-requiring font package: $pkg"
+            rpm -e --nodeps "$pkg" || true
+          else
+            echo "Keeping required font package: $pkg (required by: $reqs)"
+          fi
+        done
+        fc-cache -f || true
