@@ -1,6 +1,8 @@
 SPDX-License-Identifier: Apache-2.0
 
-Copyright 2024-2026 Bluebuild contributors, Bazzite contributors, and Ahsanur Rahman
+Copyright 2024-2026 Bluebuild contributors
+Copyright 2024-2026 Bazzite contributors
+Copyright 2024-2026 Ahsanur Rahman
 
                                  Apache License
                            Version 2.0, January 2004
@@ -190,7 +192,9 @@ Copyright 2024-2026 Bluebuild contributors, Bazzite contributors, and Ahsanur Ra
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+   Copyright 2024-2026 Bluebuild contributors
+   Copyright 2024-2026 Bazzite contributors
+   Copyright 2024-2026 Ahsanur Rahman
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
