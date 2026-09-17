@@ -77,20 +77,39 @@ echo "::endgroup::"
 echo "::group::install-brew-bundle — brew bundle (network, with retries)"
 # No HOMEBREW_NO_AUTO_UPDATE here: the tarball's formula metadata is stale,
 # and we want current bottles at build time. Auto-update fetches them.
-# Homebrew 6 bundle requires the `install` subcommand and dropped --no-lock
-# (no lock file is written anymore).
+# Primary invocation is the Homebrew 5.2+/6+ CLI (`install` subcommand,
+# Brewfile via HOMEBREW_BUNDLE_FILE — both documented by `brew bundle`).
+# If it fails, the legacy pre-6 form is tried once before the attempt
+# counts as failed — a guard against CLI interface churn. Output streams
+# to console AND a log file (PIPESTATUS preserves brew's exit code through
+# the tee; set +e keeps the failing pipeline from exiting under pipefail).
 for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
   echo "--- brew bundle attempt ${attempt}/${MAX_ATTEMPTS} ---"
-  if setpriv --reuid="${BREW_UID}" --regid="${BREW_UID}" --clear-groups \
+  BUNDLE_LOG="${BREW_HOME}/bundle-attempt-${attempt}.log"
+  set +e
+  setpriv --reuid="${BREW_UID}" --regid="${BREW_UID}" --clear-groups \
     env HOME="${BREW_HOME}" \
+    HOMEBREW_BUNDLE_FILE="${BREWFILE}" \
     HOMEBREW_NO_ANALYTICS=1 \
     HOMEBREW_NO_ENV_HINTS=1 \
-    "${PREFIX}/bin/brew" bundle install --file="${BREWFILE}"; then
+    "${PREFIX}/bin/brew" bundle install 2>&1 | tee "${BUNDLE_LOG}"
+  rc=${PIPESTATUS[0]}
+  if [ "${rc}" -ne 0 ]; then
+    echo "  WARN  modern 'brew bundle install' failed (rc=${rc}) — trying legacy invocation"
+    setpriv --reuid="${BREW_UID}" --regid="${BREW_UID}" --clear-groups \
+      env HOME="${BREW_HOME}" \
+      HOMEBREW_NO_ANALYTICS=1 \
+      HOMEBREW_NO_ENV_HINTS=1 \
+      "${PREFIX}/bin/brew" bundle --no-lock --file="${BREWFILE}" 2>&1 | tee -a "${BUNDLE_LOG}"
+    rc=${PIPESTATUS[0]}
+  fi
+  set -e
+  if [ "${rc}" -eq 0 ]; then
     echo "  OK    brew bundle completed on attempt ${attempt}"
     break
   fi
   if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
-    echo "  FAIL  brew bundle failed after ${MAX_ATTEMPTS} attempts"
+    echo "  FAIL  brew bundle failed after ${MAX_ATTEMPTS} attempts (log: ${BUNDLE_LOG})"
     echo "::endgroup::"
     exit 1
   fi
@@ -100,13 +119,15 @@ done
 echo "::endgroup::"
 
 echo "::group::install-brew-bundle — verify Cellar contents"
+# A pour counts only when complete: every pour writes a
+# Cellar/<name>/<version>/INSTALL_RECEIPT.json "tab".
 missing=0
 while IFS= read -r name; do
   [ -z "${name}" ] && continue
-  if [ -d "${PREFIX}/Cellar/${name}" ]; then
-    echo "  OK    Cellar/${name} present"
+  if ls "${PREFIX}/Cellar/${name}"/*/INSTALL_RECEIPT.json >/dev/null 2>&1; then
+    echo "  OK    Cellar/${name} poured (receipt present)"
   else
-    echo "  FAIL  Cellar/${name} missing after brew bundle"
+    echo "  FAIL  Cellar/${name} missing or incomplete after brew bundle"
     missing=$((missing + 1))
   fi
 done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")

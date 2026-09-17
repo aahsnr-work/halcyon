@@ -163,15 +163,9 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   `nix` + `nix-daemon` RPMs, `/var/nix` bind-mounted on `/nix` (`var-nix.service`
   + `nix.mount`), tmpfiles for store dirs, profile hook. Home-Manager is NOT
   baked — run `ujust home-manager-setup` after first login.
-- **Homebrew:** the base's bare brew payload is untouched; curated formulas
-  (`files/brew/Brewfile`: atuin bat btop bun cava chafa direnv dust eza fd
-  fzf gnuplot lazygit opencode pandoc pixi ripgrep starship tealdeer uv yazi
-  zellij) are baked at build time into `/usr/share/halcyon/brew-bundle.tar.zst`
-  and seeded at boot — pre-login and offline — by `halcyon-brew-bundle.service`,
-  so they are available immediately after login on fresh installs *and*
-  rebases (`/var` is not reseeded on rebase, hence the `/usr` payload). The
-  `brew-bundle.service` user unit remains as an online catch-up fallback.
-  `ujust bazzite-cli` is gone; these are the CLI tools of the image.
+- **Homebrew:** curated formula set layered on the base's brew — baked at build
+  time, seeded pre-login/offline at boot, online catch-up fallback at login.
+  Full pipeline documented in [Homebrew pipeline](#homebrew-pipeline).
 - **Dotfiles:** BlueBuild `chezmoi` module →
   `https://github.com/aahsnr-configs/dots`, `file-conflict-policy: replace`,
   applied at first login for every user (and updated daily).
@@ -185,6 +179,112 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   `JetBrains Mono`, `Noto Emoji`, `Noto Color Emoji`.
 
 ---
+
+## Homebrew pipeline
+
+The Bazzite base ships Homebrew itself. Halcyon layers a curated formula set
+on top — `files/brew/Brewfile`: atuin, bat, btop, bun, cava, chafa, direnv,
+dust, eza, fd, fzf, gnuplot, lazygit, opencode, pandoc, pixi, ripgrep,
+starship, tealdeer, uv, yazi, zellij (these are the CLI tools of the image;
+the base's `ujust bazzite-cli` flow is gone) — and makes them available
+**before first login, offline, on every deployment path**: fresh install *and*
+rebase. Three phases: build, boot, login. (BlueBuild's own `type: brew` module
+was considered and rejected — it installs and maintains brew itself but cannot
+manage formulas.)
+
+### What the base provides (left untouched)
+
+- `/usr/share/homebrew.tar.zst` — brew itself (~147 MB, from ublue-os/brew).
+- `brew-setup.service` (system, enabled by the base's preset): at boot it
+  extracts the tarball to `/home/linuxbrew/.linuxbrew` (`cp -R -n`,
+  `chown -R 1000:1000`, marker file `/etc/.linuxbrew`) and
+  **skips entirely if the prefix already exists** — the property the seeding
+  design builds on.
+- `brew-update.timer` / `brew-upgrade.timer` (+ services as uid 1000): keep
+  brew and installed formulas current. Not modified by halcyon.
+- PATH: the base's `/etc/profile.d/brew.sh` covers interactive shells (brew is
+  appended *after* system paths so coreutils/dbus stay native);
+  `/etc/environment.d/10-homebrew.conf` (shipped by halcyon) adds brew to
+  systemd-user/Wayland/GUI sessions, which never source profile.d.
+- Homebrew refuses to run as root; only uid 1000 manages the prefix.
+
+### Why the payload rides in /usr
+
+On bootc/ostree systems `/var` behaves like Docker's `VOLUME /var`: seeded
+from the image **only on initial provisioning**, then owned by the machine —
+an upgrade or rebase never re-applies image `/var` content, while `/usr` is
+swapped wholesale on every deployment. Baking formulas into
+`/var/home/linuxbrew` in the image would therefore work exactly once and
+silently break on the first rebase. The design instead bakes a payload into
+`/usr` (delivered on every deploy) and seeds it into `/var` at boot. A second
+constraint: Homebrew bottles are relocated to the prefix they are *poured
+into*, so the build-time `brew bundle` must run at the final path
+`/home/linuxbrew/.linuxbrew` — staging in a scratch directory and moving the
+tree would hardcode broken paths into every formula.
+
+### Phase 1 — build time (`brew.yml`)
+
+1. A `files` module stages `files/brew/Brewfile` to
+   `/usr/share/ublue-os/homebrew/Brewfile` early (this module runs before the
+   generic files tree copy).
+2. `install-brew-bundle.sh` then:
+   - creates `/var/home` if missing (the build container's `/home → var/home`
+     symlink is dangling — nothing backs it yet) and stages the base tarball
+     exactly as `brew-setup.service` does at boot;
+   - runs `brew bundle install` as throwaway uid 9000 via `setpriv`, at the
+     final path, with 3 retry attempts (Homebrew 5.2+/6+ CLI — the `install`
+     subcommand with `HOMEBREW_BUNDLE_FILE`, no lock file written — and a
+     legacy-invocation fallback guards against CLI churn in either
+     direction);
+   - verifies **every** Brewfile formula poured completely (each pour writes
+     an `INSTALL_RECEIPT.json` "tab" into its keg);
+   - chowns the prefix to 1000:1000 and repacks it to
+     `/usr/share/halcyon/brew-bundle.tar.zst` (~1.3 GB compressed — the whole
+     prefix including brew itself);
+   - removes all staging, including the `/var/home` it created — the image
+     layer must carry zero `/var` state.
+3. `brew-verify.sh` gates the build: base payload present, Brewfile staged,
+   payload present with **every** formula provably inside it (single tar
+   listing), and no `/home/linuxbrew` or `/var/home/linuxbrew` leakage into
+   the layer.
+
+### Phase 2 — boot time (`halcyon-brew-bundle.service`, system)
+
+One-shot at `multi-user.target`, ordered `After=brew-setup.service`, with
+**no network dependency**, gated on the payload existing.
+`brew-bundle-extract` diffs the Brewfile against the live Cellar — a formula
+counts as present only when its pour completed (every pour writes an
+`INSTALL_RECEIPT.json` "tab"; a bare directory is an incomplete pour from a
+killed run or power loss) — removes any incomplete pours, and merges the rest
+via `cp -R -n` (no-clobber — formulas the user installed or upgraded
+themselves are never downgraded), then chowns to 1000:1000.
+Because the payload carries the whole prefix, this also self-heals brew
+itself if `brew-setup.service` ever fails. On a rebase, the new image ships a
+new payload, so newly added formulas appear at the next boot. Everything
+happens pre-login and offline; when nothing is missing the unit exits in under
+a second.
+
+### Phase 3 — login time (`brew-bundle.service`, user — fallback only)
+
+Runs once per user (sentinel `~/.config/halcyon/.brew-bundle-done`, written
+only on success). `brew-bundle-install` fast-paths through direct pour-receipt
+checks — no brew invocation, no network — and exits immediately when boot
+seeding did its job. Only when formulas are genuinely missing or incomplete
+does it wait for the brew binary and run `brew bundle install` online, retried
+3× with linear back-off (brew itself reinstalls incomplete formulas
+correctly, since their tabs are absent from its database).
+
+### Verification split (module-order aware)
+
+`brew-verify.sh` runs inside `brew.yml` and checks only what exists at that
+point in the module sequence. The wiring checks — libexec helpers, both units,
+payload at the final path — live in `files-verify.sh`, which runs after the
+modules that copy those assets. Both fail the build loudly.
+
+    build:  Brewfile ──► brew bundle install (uid 9000, final path)
+                        ──► /usr/share/halcyon/brew-bundle.tar.zst
+    boot:   payload ──► diff vs Cellar ──► no-clobber merge ──► /var/home/linuxbrew
+    login:  Cellar check ──► (usually) exit 0 ──► (rarely) online brew bundle install
 
 ## Flatpak policy
 

@@ -44,13 +44,14 @@ else
 fi
 
 echo "--- Checking every Brewfile formula is inside the payload ---"
+# "Inside" means a COMPLETE pour: Cellar/<name>/<version>/INSTALL_RECEIPT.json.
 missing=0
 while IFS= read -r name; do
   [ -z "${name}" ] && continue
-  if grep -q "Cellar/${name}/" "${PAYLIST}"; then
-    echo "  PASS  payload contains Cellar/${name}"
+  if grep -F "Cellar/${name}/" "${PAYLIST}" | grep -qF "INSTALL_RECEIPT.json"; then
+    echo "  PASS  payload contains a complete pour of Cellar/${name}"
   else
-    echo "  FAIL  Cellar/${name} not found in payload"
+    echo "  FAIL  Cellar/${name} not found (complete) in payload"
     missing=$((missing + 1))
   fi
 done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")

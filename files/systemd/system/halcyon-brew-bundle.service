@@ -13,7 +13,9 @@ ConditionPathExists=/usr/share/halcyon/brew-bundle.tar.zst
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/halcyon-image/brew-bundle-extract
-TimeoutStartSec=300
+# Generous on purpose: ~87k files extracted then merged on slow eMMC
+# (handhelds) can take several minutes.
+TimeoutStartSec=900
 
 [Install]
 WantedBy=multi-user.target
