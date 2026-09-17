@@ -167,8 +167,13 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   time, seeded pre-login/offline at boot, online catch-up fallback at login.
   Full pipeline documented in [Homebrew pipeline](#homebrew-pipeline).
 - **Dotfiles:** BlueBuild `chezmoi` module →
-  `https://github.com/aahsnr-configs/dots`, `file-conflict-policy: replace`,
-  applied at first login for every user (and updated daily).
+  `https://github.com/aahsnr-configs/dotfiles`, `file-conflict-policy: replace`.
+  The repo is public, so first-login init needs no credentials; the
+  `chezmoi-init.service` user unit (enabled `--global` for all users) runs
+  `chezmoi init --apply` at login only while `~/.local/share/chezmoi/.git` is
+  absent — an offline first login simply retries at the next one. The daily
+  `chezmoi-update.timer` runs `chezmoi update --no-tty --force`: **local edits
+  to managed files are clobbered** — the repo is the source of truth.
 - **ujust recipes:** `ujust doom-setup` (clones your Doom config via SSH and
   installs Doom Emacs — needs your SSH keys) and `ujust home-manager-setup`
   (bootstraps standalone Home Manager) — shipped via the `justfiles` module,

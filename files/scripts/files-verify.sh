@@ -64,8 +64,41 @@ fi
 
 if command -v chezmoi >/dev/null 2>&1; then
   echo "  PASS  chezmoi in PATH ($(command -v chezmoi))"
+  chezmoi_version="$(chezmoi --version 2>/dev/null)"
+  if echo "${chezmoi_version}" | grep -q "v2\."; then
+    echo "  PASS  chezmoi version OK (${chezmoi_version})"
+  else
+    echo "  WARN  unexpected chezmoi version output: ${chezmoi_version}"
+  fi
 else
   echo "  FAIL  chezmoi not found in PATH"
+  exit 1
+fi
+
+# --- Chezmoi wiring (chezmoi module: user units + --global enablement) ---
+echo "--- Checking chezmoi init/update wiring ---"
+for unit in chezmoi-init.service chezmoi-update.service chezmoi-update.timer; do
+  if [[ -f "/usr/lib/systemd/user/${unit}" ]]; then
+    echo "  PASS  /usr/lib/systemd/user/${unit} present"
+  else
+    echo "  FAIL  /usr/lib/systemd/user/${unit} missing"
+    exit 1
+  fi
+done
+
+# Enablement paths follow each unit's WantedBy: init → default.target,
+# timer → timers.target (both created by the module's --global enable).
+if [[ -L "/etc/systemd/user/default.target.wants/chezmoi-init.service" ]]; then
+  echo "  PASS  chezmoi-init.service enabled --global (default.target.wants)"
+else
+  echo "  FAIL  default.target.wants/chezmoi-init.service missing — dots would not apply at login"
+  exit 1
+fi
+
+if [[ -L "/etc/systemd/user/timers.target.wants/chezmoi-update.timer" ]]; then
+  echo "  PASS  chezmoi-update.timer enabled --global (timers.target.wants)"
+else
+  echo "  FAIL  timers.target.wants/chezmoi-update.timer missing — dots would never auto-update"
   exit 1
 fi
 
