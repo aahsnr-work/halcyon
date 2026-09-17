@@ -9,8 +9,12 @@ echo "::group::apps-verify — repo hygiene cleanup"
 
 # --- Explicit repo file cleanup ---
 echo "--- Restoring terra base state (§1.11) ---"
-dnf5 config-manager setopt terra.enabled=0
-echo "  OK    terra repo disabled"
+if dnf5 repolist --enabled 2>/dev/null | grep -q '^terra'; then
+  dnf5 config-manager setopt terra.enabled=0
+  echo "  OK    terra repo was enabled — now disabled"
+else
+  echo "  OK    terra repo already disabled (cleanup ran before this script)"
+fi
 
 echo "--- Removing leftover COPR / vendor repo files ---"
 removed=0
