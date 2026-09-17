@@ -11,6 +11,6 @@ modules:
       HOME_URL: https://github.com/aahsnr-work/halcyon
       # ID/ID_LIKE intentionally untouched (fedora-compatible; §1.19k)
 
-  - type: script@v1
+  - type: script
     scripts:
       - branding-verify.sh

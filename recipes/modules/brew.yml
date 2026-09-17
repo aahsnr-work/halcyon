@@ -9,6 +9,6 @@
 # 9), so only the base payload is verified here — the full asset verification
 # lives in files-verify.sh (NOTES.md deviation O).
 modules:
-  - type: script@v1
+  - type: script
     scripts:
       - brew-verify.sh

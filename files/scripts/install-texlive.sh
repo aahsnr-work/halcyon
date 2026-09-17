@@ -21,8 +21,8 @@ echo "::endgroup::"
 echo "::group::install-texlive — download installer"
 echo "--- Fetching install-tl-unx.tar.gz from CTAN ---"
 if ! curl -fsSL --progress-bar \
-    https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz \
-    -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
+  https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz \
+  -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
   echo "  FAIL  Could not download install-tl-unx.tar.gz from CTAN" >&2
   echo "::endgroup::"
   exit 1
@@ -44,7 +44,7 @@ echo "::endgroup::"
 
 echo "::group::install-texlive — write profile & run install-tl"
 cat >"${TEXLIVE_TMP}/texlive.profile" <<EOF
-selected_scheme scheme-medium
+selected_scheme scheme-small
 TEXDIR ${TEXLIVE_INSTALL_DIR}
 TEXMFLOCAL ${TEXLIVE_INSTALL_DIR}/texmf-local
 TEXMFSYSVAR ${TEXLIVE_INSTALL_DIR}/texmf-var
@@ -58,9 +58,9 @@ echo "  OK    texlive.profile written (scheme-medium, no docs/src)"
 
 echo "--- Running install-tl (this may take several minutes) ---"
 if "${INSTALLER}" \
-    -profile "${TEXLIVE_TMP}/texlive.profile" \
-    -no-interaction \
-    -repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet; then
+  -profile "${TEXLIVE_TMP}/texlive.profile" \
+  -no-interaction \
+  -repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet; then
   echo "  OK    install-tl completed successfully"
 else
   echo "  WARN  install-tl exited non-zero — continuing to verify bin dir" >&2
@@ -79,8 +79,8 @@ echo "  OK    TeX Live bin dir: ${TEXLIVE_BINDIR}"
 if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
   echo "--- Installing extra packages via tlmgr: ${EXTRA_TL_PACKAGES[*]} ---"
   if "${TEXLIVE_BINDIR}/tlmgr" \
-      --repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet \
-      install "${EXTRA_TL_PACKAGES[@]}"; then
+    --repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet \
+    install "${EXTRA_TL_PACKAGES[@]}"; then
     echo "  OK    extra packages installed: ${EXTRA_TL_PACKAGES[*]}"
   else
     echo "  WARN  tlmgr extra package install exited non-zero" >&2
