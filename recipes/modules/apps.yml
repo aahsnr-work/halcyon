@@ -1,24 +1,11 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
-# apps.yml — browsers/editors via dnf module (UNSCOPED; repos cleaned up).
-# files/dnf/vscode.repo per §7.5. Terra pre-exists (disabled) → sandwich:
-# enable → unscoped install → re-disable. Base repo state ends as found.
-#
-# TRANSACTION SEPARATION (user directive 2026-09-17: zen-browser MUST come from
-# the sneexy COPR): terra also packages zen-browser, and when both repos are
-# enabled dnf version arbitration picked terra (observed build 8). So
-# zen-browser installs in a COPR-only transaction (terra still disabled → the
-# COPR is its only enabled source), then terra is enabled for `zed` in a second
-# transaction. Both transactions are UNSCOPED (plain names, §1.21 — never
-# repo:-scoped) and each package is provably single-source among the repos
-# enabled in its transaction.
 modules:
-  # Transaction 1 — COPR + vscode/brave repos (terra still disabled)
   - type: dnf
     repos:
       cleanup: true
       files:
-        - vscode.repo            # resolved from files/dnf/vscode.repo
+        - vscode.repo
         - https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
       keys:
         - https://packages.microsoft.com/keys/microsoft.asc
@@ -27,30 +14,26 @@ modules:
         - sneexy/zen-browser
     install:
       install-weak-deps: false
-      skip-unavailable: true     # guards brave-origin availability windows
-      packages:                  # PLAIN names only (§1.21) — unique per enabled repo set
+      skip-unavailable: false
+      packages:
         - code
         - brave-browser
         - brave-origin
-        - zen-browser            # ONLY from sneexy COPR here (terra not enabled)
-        - emacs-pgtk             # Fedora official (doom-setup needs Emacs)
-
-  # Transaction 2 — terra sandwich for zed
-  - type: script@v1
-    snippets:
-      - dnf5 config-manager setopt terra.enabled=1   # pre-existing base repo, temporarily enabled (§1.11)
+        - zen-browser
+        - emacs-pgtk
 
   - type: dnf
+    repos:
+      cleanup: true
+      files:
+        - https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
     install:
       install-weak-deps: false
+      exclude:
+        - zlib
       packages:
-        - zed                    # terra: zed requires zed-cli (provides /usr/bin/zed)
+        - zed
 
   - type: script@v1
     scripts:
-      - apps-verify.sh   # terra re-disable + explicit repo cleanup + provenance gates
-
-# TODO(user): additional apps — append PLAIN package names to the dnf install
-# lists above (or add a new dnf module entry below). NEVER use repo:-scoped
-# entries — the --repoid dependency-confinement trap breaks any package whose
-# deps live in Fedora (§1.21, README "The --repoid trap").
+      - apps-verify.sh

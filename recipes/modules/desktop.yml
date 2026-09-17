@@ -1,44 +1,112 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
-# desktop.yml — Hyprland + Noctalia + greetd.
-# UNSCOPED installs only (§1.21 --repoid trap): plain package names, deps
-# resolve from fedora+updates+COPR together; provenance verified afterwards.
-# NOTE: Fedora's binary package is `tuigreet` (source package greetd-tuigreet),
-# not `greetd-tuigreet` — verified against F43/F44 mirrors 2026-09-17.
-# greetd config ships as files/system/etc/greetd/config.toml (§7.1) — user
-# "greetd" (Fedora packaging fact §1.18). tuigreet has NO --cache flag
-# (verified against 0.9.1 + 0.11.x source 2026-09-17): /var/cache/tuigreet is
-# its hardcoded cache dir, created by the tuigreet-cache.conf tmpfiles drop-in
-# (§7.2). No user-level Hyprland config baked (Noctalia first-run wizard +
-# chezmoi dots own ~/.config/hypr).
-#
-# TODO(user): optional COPR extras from lionheartp/Hyprland (per §1.15):
-#   hyprshot, hypridle, hyprlock, hyprpaper, cliphist, kitty, waybar-git,
-#   matugen, uwsm, noctalia-greeter-git, nwg-look, qt6ct — add as PLAIN package
-#   names to the dnf install list above (never repo:-scoped, §1.21).
-#
-# sched_ext: nothing to install (§1.4) — scx-scheds/scx-tools + steamos-manager
-# are already in the base; see README (scxctl / scx_loader + BORE caveat).
 modules:
   - type: dnf
+    install:
+      install-weak-deps: false
+      skip-unavailable: false
+      packages:
+        - accountsservice
+        - bleachbit
+        - bluez-tools
+        - brightnessctl
+        - cargo
+        - cmake
+        - cronie
+        - curl
+        - ddcutil
+        - direnv
+        - distrobox
+        - emacs-pgtk
+        - fail2ban
+        - fastfetch
+        - file-roller
+        - fontconfig
+        - fonts-filesystem
+        - gcc-c++
+        - git
+        - gnome-keyring
+        - gnome-tweaks
+        - go
+        - grim
+        - gsettings-desktop-schemas
+        - gtk4-layer-shell
+        - gzip
+        - hunspell
+        - hunspell-en
+        - hunspell-en-GB
+        - hunspell-en-US
+        - ImageMagick
+        - imv
+        - inotify-tools
+        - jq
+        - kitty
+        - kitty-shell-integration
+        - kitty-terminfo
+        - liberation-fonts
+        - libinput-utils
+        - logrotate
+        - lynis
+        - man-db
+        - mpv
+        - neovim
+        - ninja-build
+        - nix
+        - nix-daemon
+        - nodejs
+        - npm
+        - papers
+        - papirus-icon-theme
+        - pipx
+        - pkgconf-pkg-config
+        - plymouth
+        - plymouth-theme-spinner
+        - podman
+        - podman-sequoia
+        - policycoreutils-python-utils
+        - pymol
+        - python3-xlib
+        - qt5ct
+        - slurp
+        - sqlite
+        - swappy
+        - thunar
+        - thunar-archive-plugin
+        - thunar-media-tags-plugin
+        - thunar-vcs-plugin
+        - thunar-volman
+        - transmission-gtk
+        - tree-sitter-cli
+        - udiskie
+        - xdg-desktop-portal
+        - xdg-user-dirs
+        - xdg-user-dirs-gtk
+        - xhost
+        - xorg-x11-server-Xorg
+        - xorg-x11-server-Xwayland
+        - xorg-x11-xauth
+        - zathura
+        - zathura-pdf-poppler
+        - zathura-plugins-all
+        - zsh
+
+  - type: dnf
     repos:
-      cleanup: true                      # disables the COPR after install; file purged below
+      cleanup: true
       copr:
         - lionheartp/Hyprland
     install:
+      skip-unavailable: false
       install-weak-deps: false
-      skip-unavailable: true
-      packages:                          # PLAIN names — deps resolve from fedora+updates+COPR
-        - hyprland-git                   # only in lionheartp COPR
-        - noctalia-git                   # only in lionheartp COPR
-        - hyprpolkitagent
-        - hyprland-qt-support
-        - greetd
-        - tuigreet                       # Fedora binary pkg name (src pkg: greetd-tuigreet)
+      packages:
+        - cliphist
+        - hyprland-git
+        - hyprpwcenter
+        - noctalia-git
+        - nwg-look
+        - qt6ct
         - xdg-desktop-portal-hyprland
-        - xdg-desktop-portal-gtk
-        - qt6-qtwayland
 
   - type: script@v1
     scripts:
-      - desktop-verify.sh        # COPR file purge + provenance/ABI/repo gates
+      - desktop-verify.sh # COPR file purge + provenance/ABI/repo gates
