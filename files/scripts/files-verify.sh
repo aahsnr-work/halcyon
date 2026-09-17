@@ -118,6 +118,46 @@ for recipe in doom-setup home-manager-setup; do
   fi
 done
 
+# --- custom.just personal recipes (imported into 60-custom.just) ---
+echo "--- Checking custom.just recipes ---"
+CUSTOM_JUST="/usr/share/bluebuild/justfiles/custom.just"
+if [[ -f "${CUSTOM_JUST}" ]]; then
+  echo "  PASS  ${CUSTOM_JUST} present"
+else
+  echo "  FAIL  ${CUSTOM_JUST} missing"
+  exit 1
+fi
+
+if grep -qF 'import "/usr/share/bluebuild/justfiles/custom.just"' "${JUST60}"; then
+  echo "  PASS  custom.just imported in 60-custom.just"
+else
+  echo "  FAIL  custom.just not imported in ${JUST60}"
+  exit 1
+fi
+
+for recipe in rebase-to-custom texlive-install texlive-update halcyon-cleanup; do
+  if grep -q "${recipe}" "${CUSTOM_JUST}"; then
+    echo "  PASS  ${recipe} recipe present in custom.just"
+  else
+    echo "  FAIL  ${recipe} recipe missing from ${CUSTOM_JUST}"
+    exit 1
+  fi
+done
+
+if grep -q "ghcr.io/aahsnr-work/halcyon" "${CUSTOM_JUST}" && ! grep -q "bazzite-hyprland" "${CUSTOM_JUST}"; then
+  echo "  PASS  rebase recipe targets the halcyon image"
+else
+  echo "  FAIL  rebase recipe does not target ghcr.io/aahsnr-work/halcyon"
+  exit 1
+fi
+
+if /usr/bin/just --justfile "${CUSTOM_JUST}" --list >/dev/null 2>&1; then
+  echo "  PASS  custom.just parses (just --list)"
+else
+  echo "  FAIL  custom.just does not parse — just --list failed"
+  exit 1
+fi
+
 # --- Brew assets (Brewfile staged by brew.yml; units by the systemd
 #     module's file copy; payload itself is verified in brew-verify.sh) ---
 echo "--- Checking brew assets ---"

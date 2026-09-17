@@ -176,8 +176,13 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   to managed files are clobbered** — the repo is the source of truth.
 - **ujust recipes:** `ujust doom-setup` (clones your Doom config via SSH and
   installs Doom Emacs — needs your SSH keys) and `ujust home-manager-setup`
-  (bootstraps standalone Home Manager) — shipped via the `justfiles` module,
-  surfaced through `/usr/share/ublue-os/just/60-custom.just`.
+  (bootstraps standalone Home Manager) from `doom-setup.just` /
+  `home-manager-setup.just`, plus the personal recipes in `custom.just`:
+  `ujust rebase-to-custom` (rebases to the published halcyon image),
+  `ujust texlive-install <pkg>` / `ujust texlive-update` (user-mode tlmgr into
+  `~/texmf`), and `ujust halcyon-cleanup` (Nix GC + Flatpak prune + journal
+  trim). All are shipped via the `justfiles` module and surfaced through
+  `/usr/share/ublue-os/just/60-custom.just`.
 - **Helpers:** `fconf` and `fe` (fuzzy fd/fzf/bat file finders) in
   `/usr/libexec/halcyon-image/`, on PATH via `/etc/profile.d/image-path.sh`.
 - **Fonts:** Nerd Fonts `JetBrainsMono` + `NerdFontsSymbolsOnly`; Google
