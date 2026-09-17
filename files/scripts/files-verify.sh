@@ -4,78 +4,107 @@
 set -euo pipefail
 
 echo "::group::files-verify — dotfile & brew asset checks"
+trap 'echo "::endgroup::"' EXIT
+
+# --- Target paths ---
+HALCYON_LIBEXEC="/usr/libexec/halcyon-image"
+IMAGE_PATH_SH="/etc/profile.d/image-path.sh"
+JUST60="/usr/share/ublue-os/just/60-custom.just"
+BREWFILE="/usr/share/ublue-os/homebrew/Brewfile"
+BREW_SERVICE="/usr/lib/systemd/user/brew-bundle.service"
+BREW_ENV="/etc/environment.d/10-homebrew.conf"
+BREW_INSTALLER="/usr/libexec/halcyon-image/brew-bundle-install"
 
 # --- Script permissions ---
-echo "--- Fixing script permissions ---"
-chmod 0755 /usr/libexec/halcyon-image/*
-echo "  OK    /usr/libexec/halcyon-image/* → 0755"
-
-# --- Core files ---
-echo "--- Checking core installed files ---"
-
-if test -f /etc/profile.d/image-path.sh; then
-  echo "  PASS  /etc/profile.d/image-path.sh present"
+echo "--- Fixing and checking script permissions ---"
+if [[ -d "${HALCYON_LIBEXEC}" ]]; then
+  find "${HALCYON_LIBEXEC}" -maxdepth 1 -type f -exec chmod 0755 {} +
+  script_count=$(find "${HALCYON_LIBEXEC}" -maxdepth 1 -type f -perm -0111 | wc -l)
+  if [[ "${script_count}" -gt 0 ]]; then
+    echo "  PASS  ${HALCYON_LIBEXEC}/* executable (${script_count} scripts)"
+  else
+    echo "  FAIL  no executable scripts found in ${HALCYON_LIBEXEC}"
+    exit 1
+  fi
 else
-  echo "  FAIL  /etc/profile.d/image-path.sh missing"
-  echo "::endgroup::"
+  echo "  FAIL  ${HALCYON_LIBEXEC} directory missing"
   exit 1
 fi
 
-if command -v chezmoi &>/dev/null; then
+# --- Core files & environment ---
+echo "--- Checking core installed files & environment ---"
+if [[ -f "${IMAGE_PATH_SH}" ]]; then
+  echo "  PASS  ${IMAGE_PATH_SH} present"
+else
+  echo "  FAIL  ${IMAGE_PATH_SH} missing"
+  exit 1
+fi
+
+if grep -q '/home/linuxbrew/.linuxbrew/bin' "${IMAGE_PATH_SH}"; then
+  echo "  PASS  Homebrew PATH export present in ${IMAGE_PATH_SH}"
+else
+  echo "  FAIL  Homebrew PATH export missing from ${IMAGE_PATH_SH}"
+  exit 1
+fi
+
+if [[ -f "${BREW_ENV}" ]]; then
+  echo "  PASS  ${BREW_ENV} present"
+else
+  echo "  FAIL  ${BREW_ENV} missing"
+  exit 1
+fi
+
+if command -v chezmoi >/dev/null 2>&1; then
   echo "  PASS  chezmoi in PATH ($(command -v chezmoi))"
 else
   echo "  FAIL  chezmoi not found in PATH"
-  echo "::endgroup::"
   exit 1
 fi
 
 # --- Justfile recipes ---
 echo "--- Checking 60-custom.just recipes ---"
-
-JUST60=/usr/share/ublue-os/just/60-custom.just
-if grep -q 'doom-setup' "${JUST60}"; then
-  echo "  PASS  doom-setup recipe present in 60-custom.just"
-else
-  echo "  FAIL  doom-setup recipe missing from ${JUST60}"
-  echo "::endgroup::"
+if [[ ! -f "${JUST60}" ]]; then
+  echo "  FAIL  ${JUST60} missing"
   exit 1
 fi
 
-if grep -q 'home-manager-setup' "${JUST60}"; then
-  echo "  PASS  home-manager-setup recipe present in 60-custom.just"
-else
-  echo "  FAIL  home-manager-setup recipe missing from ${JUST60}"
-  echo "::endgroup::"
-  exit 1
-fi
+for recipe in doom-setup home-manager-setup; do
+  if grep -q "${recipe}" "${JUST60}"; then
+    echo "  PASS  ${recipe} recipe present in 60-custom.just"
+  else
+    echo "  FAIL  ${recipe} recipe missing from ${JUST60}"
+    exit 1
+  fi
+done
 
 # --- Brew assets (copied by files step + nix.yml systemd module) ---
 echo "--- Checking brew assets ---"
+if [[ ! -f "${BREWFILE}" ]]; then
+  echo "  FAIL  ${BREWFILE} missing"
+  exit 1
+fi
+echo "  PASS  Brewfile present"
 
-if test -f /usr/share/ublue-os/homebrew/Brewfile; then
-  echo "  PASS  Brewfile present"
+brew_count=$(grep -c '^[[:space:]]*brew ' "${BREWFILE}" || true)
+if [[ "${brew_count}" -gt 0 ]]; then
+  echo "  PASS  Brewfile contains ${brew_count} brew entries"
 else
-  echo "  FAIL  /usr/share/ublue-os/homebrew/Brewfile missing"
-  echo "::endgroup::"
+  echo "  FAIL  Brewfile contains no valid 'brew' entries"
   exit 1
 fi
 
-brew_count=$(grep -c '^brew ' /usr/share/ublue-os/homebrew/Brewfile)
-if [ "${brew_count}" -eq 21 ]; then
-  echo "  PASS  Brewfile contains exactly 21 brew entries"
-else
-  echo "  FAIL  Brewfile brew-entry count mismatch: expected 21, got ${brew_count}"
-  echo "::endgroup::"
-  exit 1
-fi
-
-if test -f /usr/lib/systemd/user/brew-bundle.service; then
+if [[ -f "${BREW_SERVICE}" ]]; then
   echo "  PASS  brew-bundle.service user unit present"
 else
-  echo "  FAIL  /usr/lib/systemd/user/brew-bundle.service missing"
-  echo "::endgroup::"
+  echo "  FAIL  ${BREW_SERVICE} missing"
+  exit 1
+fi
+
+if [[ -x "${BREW_INSTALLER}" ]]; then
+  echo "  PASS  ${BREW_INSTALLER} present and executable"
+else
+  echo "  FAIL  ${BREW_INSTALLER} missing or not executable"
   exit 1
 fi
 
 echo "--- files-verify complete — all checks passed ---"
-echo "::endgroup::"

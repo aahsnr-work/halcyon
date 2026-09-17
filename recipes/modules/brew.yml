@@ -1,6 +1,6 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
-# brew.yml — 21 formulas via Brewfile + first-login user service.
+# brew.yml — curated formulas via Brewfile + first-login user service.
 # Assets ship via files.yml's files module (Brewfile → image) and the
 # nix.yml systemd module's unit copy (brew-bundle.service →
 # /usr/lib/systemd/user/). One home per asset, no duplicates. The base brew

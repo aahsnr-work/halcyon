@@ -163,11 +163,11 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   `nix` + `nix-daemon` RPMs, `/var/nix` bind-mounted on `/nix` (`var-nix.service`
   + `nix.mount`), tmpfiles for store dirs, profile hook. Home-Manager is NOT
   baked — run `ujust home-manager-setup` after first login.
-- **Homebrew:** the base's bare brew payload is untouched; 21 formulas install at
+- **Homebrew:** the base's bare brew payload is untouched; curated formulas install at
   first login via the `brew-bundle.service` user service reading
   `/usr/share/ublue-os/homebrew/Brewfile`
-  (atuin bat btop bun cava chafa direnv dust eza fd fzf gnuplot lazygit pandoc
-  pixi ripgrep starship tealdeer uv yazi zellij). `ujust bazzite-cli` is gone;
+  (atuin bat btop bun cava chafa direnv dust eza fd fzf gnuplot lazygit opencode
+  pandoc pixi ripgrep starship tealdeer uv yazi zellij). `ujust bazzite-cli` is gone;
   these are the CLI tools of the image.
 - **Dotfiles:** BlueBuild `chezmoi` module →
   `https://github.com/aahsnr-configs/dots`, `file-conflict-policy: replace`,
