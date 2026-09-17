@@ -11,12 +11,11 @@ modules:
     system:
       # repo-url/repo-name omitted → Flathub defaults (tsp-verified)
       install:
-        - com.ranfdev.DistroShelf          # v4: system flatpak replaces the stage-built RPM
-        - com.github.tchx84.Flatseal
+        - com.ranfdev.DistroShelf # v4: system flatpak replaces the stage-built RPM
         - org.onlyoffice.desktopeditors
         - com.bitwarden.desktop
         - com.ticktick.TickTick
-      remove:                        # base GNOME set (§1.8) minus Flatseal & DistroShelf
+      remove: # base GNOME set (§1.8) minus Flatseal & DistroShelf
         - org.mozilla.firefox
         - com.mattjakeman.ExtensionManager
         - com.github.Matoking.protontricks

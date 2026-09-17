@@ -20,6 +20,7 @@ modules:
         - fail2ban
         - fastfetch
         - file-roller
+        - flatseal
         - fontconfig
         - fonts-filesystem
         - gcc-c++
