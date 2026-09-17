@@ -9,16 +9,13 @@ modules:
       install-weak-deps: false
       skip-unavailable: true
       packages:
-        - gcc        # KEPT — emacs-pgtk (native-comp) Requires gcc at runtime; removing it
-                     # cascades into removing emacs-pgtk (NOTES.md §4 deviation S). It is
-                     # pulled in as an emacs-pgtk dependency in apps.yml anyway; also used
-                     # by install-pyprland.sh's optional C helper.
-        - perl       # tlmgr — NOT in base (Containerfile audit); KEPT for runtime tlmgr
-        - jq         # install-obsidian.sh / install-pyprland.sh — base presence unconfirmed; KEPT (tiny)
-        - python3    # venv base (python3-pip IS in base → likely present; idempotent)
+        - gcc
+        - perl
+        - jq
+        - python3
 
   - type: script@v1
-    scripts:           # official mechanism: executes files/scripts/*.sh ($CONFIG_DIRECTORY/scripts)
+    scripts: # official mechanism: executes files/scripts/*.sh ($CONFIG_DIRECTORY/scripts)
       - install-obsidian.sh
       - install-zotero.sh
       - install-pyprland.sh
