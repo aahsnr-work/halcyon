@@ -291,6 +291,25 @@ modules that copy those assets. Both fail the build loudly.
     boot:   payload ──► diff vs Cellar ──► no-clobber merge ──► /var/home/linuxbrew
     login:  Cellar check ──► (usually) exit 0 ──► (rarely) online brew bundle install
 
+### Adding packages later
+
+Adding a formula is a one-line edit to `files/brew/Brewfile` — no script
+changes, ever. Every stage is data-driven and adapts automatically: the
+parsers accept quoted or unquoted entries and core or tapped formulas
+(`brew "user/tap/name"` is verified as `Cellar/name/`), the build bakes and
+receipt-checks it, the boot seeder merges it into rebased machines, the login
+fast-path recognizes it, and the base's `brew-upgrade.timer` keeps it current.
+Two rules to keep in mind:
+
+- **Formulas only.** A `cask` entry fails the build immediately — casks are a
+  macOS concept and do not install on this image. A tapped formula needs its
+  `tap "…"` line alongside it so `brew bundle` can resolve it.
+- **Removal is asymmetric.** Dropping a line keeps the formula off fresh
+  installs and rebased machines (it is simply never seeded), but the boot
+  seeder is deliberately additive — it will not uninstall the formula from a
+  machine that already has it. Remove those by hand
+  (`brew uninstall <formula>`).
+
 ## Flatpak policy
 
 `default-flatpaks@v1` (v2 has no `remove:` support). Install/remove lists apply

@@ -39,7 +39,10 @@ while IFS= read -r name; do
   if ! formula_complete "${name}"; then
     missing+=("${name}")
   fi
-done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")
+# Cellar dirs are named by formula only — strip any "tap/" prefix and
+# tolerate quoted or unquoted entries, so new Brewfile lines of any
+# common style are picked up automatically.
+done < <(sed -nE 's/^[[:space:]]*brew "?([^" ]+)"?.*/\1/p' "${BREWFILE}" | sed 's|^.*/||')
 
 if [[ ${#missing[@]} -eq 0 ]]; then
   echo "OK: All Brewfile formulas already present (boot-time seeding) — nothing to do."

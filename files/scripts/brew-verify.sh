@@ -21,7 +21,7 @@ BREWFILE=/usr/share/ublue-os/homebrew/Brewfile
 
 echo "--- Checking Brewfile ---"
 if test -f "${BREWFILE}"; then
-  formula_count=$(grep -c '^[[:space:]]*brew "' "${BREWFILE}" || true)
+  formula_count=$(grep -cE '^[[:space:]]*brew "?[^" ]+"?' "${BREWFILE}" || true)
   echo "  PASS  ${BREWFILE} present (${formula_count} formulas)"
 else
   echo "  FAIL  ${BREWFILE} missing — brew.yml files module did not stage it"
@@ -45,16 +45,26 @@ fi
 
 echo "--- Checking every Brewfile formula is inside the payload ---"
 # "Inside" means a COMPLETE pour: Cellar/<name>/<version>/INSTALL_RECEIPT.json.
+# NOTE: use grep -c (no -q, no early exit) for the two-stage match — a
+# `grep | grep -q` pipeline under pipefail can fail with SIGPIPE (141) when
+# the upstream grep is still emitting later matches after the -q grep has
+# already found its first match and exited. That false negative is exactly
+# what failed the CI run for btop/chafa/gnuplot.
 missing=0
 while IFS= read -r name; do
   [ -z "${name}" ] && continue
-  if grep -F "Cellar/${name}/" "${PAYLIST}" | grep -qF "INSTALL_RECEIPT.json"; then
-    echo "  PASS  payload contains a complete pour of Cellar/${name}"
+  receipts=$(grep -F "Cellar/${name}/" "${PAYLIST}" 2>/dev/null | grep -cF "INSTALL_RECEIPT.json" || true)
+  if [ "${receipts}" -gt 0 ]; then
+    echo "  PASS  payload contains a complete pour of Cellar/${name} (${receipts} receipt(s))"
   else
-    echo "  FAIL  Cellar/${name} not found (complete) in payload"
+    echo "  FAIL  Cellar/${name} not found (complete) in payload — payload entries for it:"
+    grep -F "Cellar/${name}/" "${PAYLIST}" 2>/dev/null | head -5 | sed 's/^/        /' || true
     missing=$((missing + 1))
   fi
-done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")
+# Cellar dirs are named by formula only — strip any "tap/" prefix and
+# tolerate quoted or unquoted entries, so new Brewfile lines of any
+# common style are picked up automatically.
+done < <(sed -nE 's/^[[:space:]]*brew "?([^" ]+)"?.*/\1/p' "${BREWFILE}" | sed 's|^.*/||')
 if [ "${missing}" -gt 0 ]; then
   echo "  FAIL  ${missing} formula(s) missing from the payload"
   echo "::endgroup::"

@@ -41,7 +41,10 @@ while IFS= read -r name; do
   elif ! formula_complete "${name}"; then
     incomplete+=("${name}")
   fi
-done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")
+# Cellar dirs are named by formula only — strip any "tap/" prefix and
+# tolerate quoted or unquoted entries, so new Brewfile lines of any
+# common style are picked up automatically.
+done < <(sed -nE 's/^[[:space:]]*brew "?([^" ]+)"?.*/\1/p' "${BREWFILE}" | sed 's|^.*/||')
 
 if [ "${#missing[@]}" -eq 0 ] && [ "${#incomplete[@]}" -eq 0 ]; then
   echo "OK: All Brewfile formulas present and complete — nothing to seed."

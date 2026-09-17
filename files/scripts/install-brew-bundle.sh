@@ -33,8 +33,17 @@ if [ ! -f "${BREWFILE}" ]; then
   echo "::endgroup::"
   exit 1
 fi
-formula_count=$(grep -c '^[[:space:]]*brew "' "${BREWFILE}" || true)
+formula_count=$(grep -cE '^[[:space:]]*brew "?[^" ]+"?' "${BREWFILE}" || true)
 echo "  OK    ${BREWFILE} present (${formula_count} formulas)"
+
+# Casks are a macOS concept — on Linux they do not install, and a cask
+# entry would otherwise be baked into the payload unverified. Fail loudly
+# so the Brewfile stays formulas-only.
+if grep -qE '^[[:space:]]*cask "' "${BREWFILE}"; then
+  echo "  FAIL  ${BREWFILE} contains cask entries — casks are unsupported on Linux; use formulas only"
+  echo "::endgroup::"
+  exit 1
+fi
 
 if [ ! -f "${BASE_TARBALL}" ]; then
   echo "  FAIL  ${BASE_TARBALL} missing — base brew payload not in image"
@@ -75,8 +84,16 @@ echo "  OK    prefix + HOME owned by uid ${BREW_UID} for the bundle run"
 echo "::endgroup::"
 
 echo "::group::install-brew-bundle — brew bundle (network, with retries)"
-# No HOMEBREW_NO_AUTO_UPDATE here: the tarball's formula metadata is stale,
-# and we want current bottles at build time. Auto-update fetches them.
+# HOMEBREW_NO_AUTO_UPDATE=1 is REQUIRED here, not an optimization: with
+# auto-update enabled, brew self-updates the CLI in place before pouring
+# (6.0.22 from the tarball -> whatever master-adjacent state GitHub serves).
+# That mid-run CLI swap made pours nondeterministic — a CI build poured all
+# 22 formulas yet the payload lacked INSTALL_RECEIPT.json for 3 of them
+# (btop, chafa, gnuplot), and a local reproduction crashed outright on the
+# self-updated CLI. Pinned to the tarball's known-good brew, pours are
+# deterministic and receipts always land in the Cellar; formula versions
+# lag the tarball by design and are converged on the installed system by
+# the base's brew-upgrade.timer.
 # Primary invocation is the Homebrew 5.2+/6+ CLI (`install` subcommand,
 # Brewfile via HOMEBREW_BUNDLE_FILE — both documented by `brew bundle`).
 # If it fails, the legacy pre-6 form is tried once before the attempt
@@ -89,6 +106,7 @@ for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
   set +e
   setpriv --reuid="${BREW_UID}" --regid="${BREW_UID}" --clear-groups \
     env HOME="${BREW_HOME}" \
+    HOMEBREW_NO_AUTO_UPDATE=1 \
     HOMEBREW_BUNDLE_FILE="${BREWFILE}" \
     HOMEBREW_NO_ANALYTICS=1 \
     HOMEBREW_NO_ENV_HINTS=1 \
@@ -98,6 +116,7 @@ for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
     echo "  WARN  modern 'brew bundle install' failed (rc=${rc}) — trying legacy invocation"
     setpriv --reuid="${BREW_UID}" --regid="${BREW_UID}" --clear-groups \
       env HOME="${BREW_HOME}" \
+      HOMEBREW_NO_AUTO_UPDATE=1 \
       HOMEBREW_NO_ANALYTICS=1 \
       HOMEBREW_NO_ENV_HINTS=1 \
       "${PREFIX}/bin/brew" bundle --no-lock --file="${BREWFILE}" 2>&1 | tee -a "${BUNDLE_LOG}"
@@ -130,7 +149,10 @@ while IFS= read -r name; do
     echo "  FAIL  Cellar/${name} missing or incomplete after brew bundle"
     missing=$((missing + 1))
   fi
-done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")
+# Cellar dirs are named by formula only — strip any "tap/" prefix and
+# tolerate quoted or unquoted entries, so new Brewfile lines of any
+# common style are picked up automatically.
+done < <(sed -nE 's/^[[:space:]]*brew "?([^" ]+)"?.*/\1/p' "${BREWFILE}" | sed 's|^.*/||')
 if [ "${missing}" -gt 0 ]; then
   echo "  FAIL  ${missing} formula(s) missing — refusing to repack"
   echo "::endgroup::"
