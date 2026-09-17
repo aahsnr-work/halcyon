@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Installing TeX Live (scheme-medium) to /usr/lib/texlive ==="
+echo "::group::install-texlive — setup"
 TEXLIVE_INSTALL_DIR="/usr/lib/texlive"
 mkdir -p "${TEXLIVE_INSTALL_DIR}"
+echo "  INFO  install dir: ${TEXLIVE_INSTALL_DIR}"
 
 # Additional TeX Live packages to install via tlmgr at build time.
 # Add any individual packages here that you would like baked into the immutable image.
@@ -11,13 +12,38 @@ EXTRA_TL_PACKAGES=(
   latexmk
   biber
 )
+echo "  INFO  extra tlmgr packages: ${EXTRA_TL_PACKAGES[*]}"
 
 TEXLIVE_TMP="$(mktemp -d)"
-trap 'rm -rf "${TEXLIVE_TMP}"' EXIT
+trap 'echo "  INFO  cleaning up ${TEXLIVE_TMP}"; rm -rf "${TEXLIVE_TMP}"' EXIT
+echo "::endgroup::"
 
-if curl -fsSL https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
-  tar -xzf "${TEXLIVE_TMP}/install-tl-unx.tar.gz" -C "${TEXLIVE_TMP}"
-  cat >"${TEXLIVE_TMP}/texlive.profile" <<EOF
+echo "::group::install-texlive — download installer"
+echo "--- Fetching install-tl-unx.tar.gz from CTAN ---"
+if ! curl -fsSL --progress-bar \
+    https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz \
+    -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
+  echo "  FAIL  Could not download install-tl-unx.tar.gz from CTAN" >&2
+  echo "::endgroup::"
+  exit 1
+fi
+size=$(du -h "${TEXLIVE_TMP}/install-tl-unx.tar.gz" | cut -f1)
+echo "  OK    downloaded install-tl-unx.tar.gz (${size})"
+
+tar -xzf "${TEXLIVE_TMP}/install-tl-unx.tar.gz" -C "${TEXLIVE_TMP}"
+echo "  OK    installer archive extracted"
+
+INSTALLER="$(find "${TEXLIVE_TMP}" -mindepth 2 -maxdepth 2 -name 'install-tl' -type f -perm /111 | head -n1)"
+if [[ -z "${INSTALLER}" || ! -x "${INSTALLER}" ]]; then
+  echo "  FAIL  install-tl executable not found under ${TEXLIVE_TMP}" >&2
+  echo "::endgroup::"
+  exit 1
+fi
+echo "  OK    install-tl found at ${INSTALLER}"
+echo "::endgroup::"
+
+echo "::group::install-texlive — write profile & run install-tl"
+cat >"${TEXLIVE_TMP}/texlive.profile" <<EOF
 selected_scheme scheme-medium
 TEXDIR ${TEXLIVE_INSTALL_DIR}
 TEXMFLOCAL ${TEXLIVE_INSTALL_DIR}/texmf-local
@@ -28,37 +54,50 @@ tlpdbopt_autobackup 0
 tlpdbopt_install_docfiles 0
 tlpdbopt_install_srcfiles 0
 EOF
-  INSTALLER="$(find "${TEXLIVE_TMP}" -mindepth 2 -maxdepth 2 -name 'install-tl' -type f -perm /111 | head -n1)"
-  if [[ -n "${INSTALLER}" && -x "${INSTALLER}" ]]; then
-    "${INSTALLER}" \
-      -profile "${TEXLIVE_TMP}/texlive.profile" \
-      -no-interaction \
-      -repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet || echo "WARNING: install-tl exited non-zero" >&2
+echo "  OK    texlive.profile written (scheme-medium, no docs/src)"
+
+echo "--- Running install-tl (this may take several minutes) ---"
+if "${INSTALLER}" \
+    -profile "${TEXLIVE_TMP}/texlive.profile" \
+    -no-interaction \
+    -repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet; then
+  echo "  OK    install-tl completed successfully"
+else
+  echo "  WARN  install-tl exited non-zero — continuing to verify bin dir" >&2
+fi
+echo "::endgroup::"
+
+echo "::group::install-texlive — tlmgr extras & PATH setup"
+TEXLIVE_BINDIR="$(find "${TEXLIVE_INSTALL_DIR}" -maxdepth 3 -type d -name 'x86_64-linux' | head -n1)"
+if [ -z "${TEXLIVE_BINDIR}" ]; then
+  echo "  WARN  Could not locate x86_64-linux bin dir under ${TEXLIVE_INSTALL_DIR} — PATH setup skipped" >&2
+  echo "::endgroup::"
+  exit 0
+fi
+echo "  OK    TeX Live bin dir: ${TEXLIVE_BINDIR}"
+
+if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
+  echo "--- Installing extra packages via tlmgr: ${EXTRA_TL_PACKAGES[*]} ---"
+  if "${TEXLIVE_BINDIR}/tlmgr" \
+      --repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet \
+      install "${EXTRA_TL_PACKAGES[@]}"; then
+    echo "  OK    extra packages installed: ${EXTRA_TL_PACKAGES[*]}"
   else
-    echo "ERROR: install-tl installer executable not found under ${TEXLIVE_TMP}" >&2
-    exit 1
+    echo "  WARN  tlmgr extra package install exited non-zero" >&2
   fi
+fi
 
-  TEXLIVE_BINDIR="$(find "${TEXLIVE_INSTALL_DIR}" -maxdepth 3 -type d -name 'x86_64-linux' | head -n1)"
-  if [ -n "${TEXLIVE_BINDIR}" ]; then
-    # Install additional TeX Live packages via tlmgr during image build
-    if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
-      echo "Installing additional TeX Live packages via tlmgr: ${EXTRA_TL_PACKAGES[*]}..."
-      "${TEXLIVE_BINDIR}/tlmgr" --repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet install "${EXTRA_TL_PACKAGES[@]}" || echo "WARNING: tlmgr package installation exited non-zero" >&2
-    fi
-
-    install -d /etc/profile.d
-    cat >/etc/profile.d/texlive.sh <<EOF
+install -d /etc/profile.d
+cat >/etc/profile.d/texlive.sh <<EOF
 # TeX Live (installed under /usr/lib/texlive during image build)
 export PATH="${TEXLIVE_BINDIR}:\$PATH"
 export MANPATH="${TEXLIVE_INSTALL_DIR}/texmf-dist/doc/man:\${MANPATH:-}"
 export INFOPATH="${TEXLIVE_INSTALL_DIR}/texmf-dist/doc/info:\${INFOPATH:-}"
 EOF
-    chmod 644 /etc/profile.d/texlive.sh
-    echo "TeX Live successfully installed to ${TEXLIVE_INSTALL_DIR}"
-  else
-    echo "WARNING: Could not locate TeX Live bin directory." >&2
-  fi
-else
-  echo "WARNING: Could not download install-tl-unx.tar.gz from CTAN" >&2
-fi
+chmod 644 /etc/profile.d/texlive.sh
+echo "  OK    /etc/profile.d/texlive.sh written"
+
+install_size=$(du -sh "${TEXLIVE_INSTALL_DIR}" | cut -f1)
+echo "  OK    TeX Live (scheme-medium) installed to ${TEXLIVE_INSTALL_DIR} (${install_size})"
+echo "--- install-texlive complete ---"
+echo "::endgroup::"

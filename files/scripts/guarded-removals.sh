@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # halcyon Step C — guarded removals + hard verification (prompt §5.1)
 set -uo pipefail
+
+echo "::group::guarded-removals — candidate detection"
+
 # compose-variance / expected-absent candidates: remove only what is installed
 CANDIDATES=(
   gnome-classic-session gnome-classic-session-xsession gnome-terminal gnome-console
@@ -15,59 +18,102 @@ CANDIDATES=(
   gnome-shell-extension-window-list gnome-shell-extension-workspace-indicator
   mozilla-filesystem
 )
+
 present=()
+absent=()
 for p in "${CANDIDATES[@]}"; do
   if rpm -q "$p" >/dev/null 2>&1; then
+    ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")
     present+=("$p")
+    echo "  FOUND  ${p}-${ver}"
+  else
+    absent+=("$p")
   fi
 done
-echo "guarded candidates present: ${present[*]:-none}"
 
-# reverse-dep gates: sddm / cage stay (→ masked in services.yml) if a keeper needs them
+echo ""
+echo "  INFO  ${#present[@]} of ${#CANDIDATES[@]} candidates present (${#absent[@]} already absent)"
+echo "::endgroup::"
+
+# --- Reverse-dep gates: sddm / cage ---
+echo "::group::guarded-removals — reverse-dep gates (sddm, cage)"
 for p in sddm cage; do
   if rpm -q "$p" >/dev/null 2>&1; then
     reqs="$(dnf -q repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
     if [ -n "${reqs}" ]; then
-      echo "gate: keeping ${p} (required by: $(echo "${reqs}" | tr '\n' ' '))"
+      echo "  GATE  keeping ${p} — required by:"
+      echo "${reqs}" | sed 's/^/          /'
     else
-      echo "gate: removing ${p} (nothing installed requires it)"
+      echo "  GATE  removing ${p} — nothing installed requires it"
       present+=("$p")
     fi
+  else
+    echo "  SKIP  ${p} not installed"
   fi
 done
+echo "::endgroup::"
 
+# --- DNF removal ---
+echo "::group::guarded-removals — dnf remove"
 if [ "${#present[@]}" -gt 0 ]; then
-  dnf -y remove "${present[@]}" || echo 'WARNING: guarded dnf remove failed; hard verification below will catch survivors' >&2
+  echo "  INFO  Removing ${#present[@]} package(s): ${present[*]}"
+  if dnf -y remove "${present[@]}"; then
+    echo "  OK    dnf remove succeeded"
+  else
+    echo "  WARN  dnf remove exited non-zero — hard verification below will catch survivors" >&2
+  fi
+else
+  echo "  SKIP  nothing to remove"
 fi
+echo "::endgroup::"
 
-# hard-fail verification (constraint 14)
-# HARD: keepers empirically present in the base image (2026-09-17 build) that
-# must survive our removals.
+# --- Hard-fail verification (constraint 14) ---
+echo "::group::guarded-removals — hard-fail verification (must-be-gone)"
+echo "--- Packages that must NOT survive ---"
 rc=0
 for p in gnome-shell gdm mutter waydroid fastfetch firefox inputplumber \
   steamos-manager-powerstation steamdeck-gnome-presets jupiter-fan-control; do
   if rpm -q "$p" >/dev/null 2>&1; then
-    echo "ERROR: ${p} still installed after removals" >&2
+    ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")
+    echo "  FAIL  ${p}-${ver} still installed after removals" >&2
     rc=1
+  else
+    echo "  PASS  ${p} — absent (correct)"
   fi
 done
+echo "::endgroup::"
+
+echo "::group::guarded-removals — hard-fail verification (keepers)"
+echo "--- Packages that must survive ---"
 for p in bazaar bazzite-portal steam terra-gamescope umu-launcher lutris \
   scx-scheds scx-tools usbip xwiimote-ng input-remapper; do
-  if ! rpm -q "$p" >/dev/null 2>&1; then
-    echo "ERROR: keeper ${p} missing after removals" >&2
+  if rpm -q "$p" >/dev/null 2>&1; then
+    ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")
+    echo "  PASS  ${p}-${ver} present (keeper)"
+  else
+    echo "  FAIL  keeper ${p} missing after removals — cascade regression?" >&2
     rc=1
   fi
 done
-# SOFT: the published stable base does NOT ship these (prompt §1 expected them;
-# recorded as base-image variance in NOTES.md §5). Warn loudly so a future base
-# that re-adds them doesn't slip away unnoticed, but don't fail the build.
+echo "::endgroup::"
+
+# --- Soft checks (known stable-channel base variance, NOTES.md §5) ---
+echo "::group::guarded-removals — soft checks (base-image variance)"
+echo "--- Packages expected absent on stable channel (non-fatal) ---"
 for p in steamos-manager gamescope-session-ogui-steam gamemode; do
-  rpm -q "$p" >/dev/null 2>&1 ||
-    echo "WARNING: ${p} not present — known stable-channel base variance (NOTES.md §5)"
+  if rpm -q "$p" >/dev/null 2>&1; then
+    ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")
+    echo "  PRESENT  ${p}-${ver} (unexpected but non-fatal — check NOTES.md §5)"
+  else
+    echo "  OK    ${p} absent (expected stable-channel variance)"
+  fi
 done
+
 if [ -f /usr/bin/distroshelf-helper ]; then
-  echo "distroshelf-helper file present (kept)"
+  echo "  OK    /usr/bin/distroshelf-helper present (kept)"
 else
-  echo "WARNING: /usr/bin/distroshelf-helper absent — stable-channel base variance (NOTES.md §5)"
+  echo "  WARN  /usr/bin/distroshelf-helper absent — stable-channel base variance (NOTES.md §5)"
 fi
-exit "$rc"
+echo "::endgroup::"
+
+exit "${rc}"
