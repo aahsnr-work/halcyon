@@ -23,6 +23,7 @@ modules:
         - brave-browser
         - brave-origin
         - zen-browser
+        - zed
         - emacs-pgtk
         - neovim
         - nodejs
