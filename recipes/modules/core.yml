@@ -70,7 +70,8 @@ modules:
         - zathura-pdf-poppler
         - zathura-plugins-all
         - zsh
-
-  # - type: script
-  #   scripts:
-  #     - desktop-verify.sh # COPR file purge + provenance/ABI/repo gates
+        - setroubleshoot
+        - setroubleshoot-server
+        - setroubleshoot-plugins
+        - setools-console
+        - udica
