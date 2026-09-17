@@ -7,6 +7,7 @@ modules:
       files:
         - vscode.repo
         - https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
+        - https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
       keys:
         - https://packages.microsoft.com/keys/microsoft.asc
         - https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
@@ -15,23 +16,15 @@ modules:
     install:
       install-weak-deps: false
       skip-unavailable: false
+      exclude:
+        - zlib
       packages:
         - code
         - brave-browser
         - brave-origin
         - zen-browser
         - emacs-pgtk
-
-  - type: dnf
-    repos:
-      cleanup: true
-      files:
-        - https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
-    install:
-      install-weak-deps: false
-      exclude:
-        - zlib
-      packages:
+        - neovim
         - zed
 
   - type: script
