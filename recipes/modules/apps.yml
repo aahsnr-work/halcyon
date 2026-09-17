@@ -16,19 +16,26 @@ modules:
     install:
       install-weak-deps: false
       skip-unavailable: false
-      exclude:
-        - zlib
+      # exclude:
+      #   - zlib
       packages:
         - code
         - brave-browser
         - brave-origin
         - zen-browser
-        - zed
         - emacs-pgtk
         - neovim
         - nodejs
         - npm
         - tree-sitter-cli
+        - repo: terra
+          exclude:
+            - zlib
+          install-weak-deps: false
+          packages:
+            - zed
+
+
 
   - type: script
     scripts:
