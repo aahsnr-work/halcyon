@@ -33,7 +33,7 @@ OPTIONS
 
 DEPENDENCIES
     This script requires the following tools to be installed:
-
+    
     - fd                Fast file finder (https://github.com/sharkdp/fd)
     - fzf               Command-line fuzzy finder (https://github.com/junegunn/fzf)
     - bat               Syntax-highlighted cat clone (https://github.com/sharkdp/bat)
