@@ -77,25 +77,6 @@ else
 fi
 echo "::endgroup::"
 
-echo "::group::brew-verify — boot-time seeding wiring"
-if test -f /usr/lib/systemd/system/halcyon-brew-bundle.service; then
-  echo "  PASS  system unit halcyon-brew-bundle.service present"
-else
-  echo "  FAIL  /usr/lib/systemd/system/halcyon-brew-bundle.service missing"
-  echo "::endgroup::"
-  exit 1
-fi
-
-for helper in brew-bundle-extract brew-bundle-install; do
-  if test -x "/usr/libexec/halcyon-image/${helper}"; then
-    echo "  PASS  helper ${helper} present + executable"
-  else
-    echo "  FAIL  /usr/libexec/halcyon-image/${helper} missing or not executable"
-    echo "::endgroup::"
-    exit 1
-  fi
-done
-
 if test -f /usr/lib/systemd/user/brew-bundle.service; then
   echo "  PASS  user fallback unit brew-bundle.service present"
 else
@@ -105,4 +86,8 @@ else
 fi
 echo "::endgroup::"
 
+# NOTE: the libexec helpers (brew-bundle-extract/brew-bundle-install) and the
+# systemd unit wiring are verified in files-verify.sh — they are copied by
+# modules that run AFTER this one (files.yml's tree copy), mirroring the
+# ordering-aware split this module has always documented.
 echo "--- brew-verify complete ---"

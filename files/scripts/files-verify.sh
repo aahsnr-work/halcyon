@@ -116,4 +116,32 @@ else
   exit 1
 fi
 
+# Boot-time seeding wiring (all present by this module: libexec helpers via
+# the files tree copy, units via the systemd module's unit copy, payload
+# baked by brew.yml's install-brew-bundle.sh).
+BREW_EXTRACTOR="${HALCYON_LIBEXEC}/brew-bundle-extract"
+BREW_SYSTEM_UNIT="/usr/lib/systemd/system/halcyon-brew-bundle.service"
+BREW_PAYLOAD="/usr/share/halcyon/brew-bundle.tar.zst"
+
+if [[ -x "${BREW_EXTRACTOR}" ]]; then
+  echo "  PASS  ${BREW_EXTRACTOR} present and executable"
+else
+  echo "  FAIL  ${BREW_EXTRACTOR} missing or not executable"
+  exit 1
+fi
+
+if [[ -f "${BREW_SYSTEM_UNIT}" ]]; then
+  echo "  PASS  ${BREW_SYSTEM_UNIT} present"
+else
+  echo "  FAIL  ${BREW_SYSTEM_UNIT} missing"
+  exit 1
+fi
+
+if [[ -f "${BREW_PAYLOAD}" ]]; then
+  echo "  PASS  ${BREW_PAYLOAD} present ($(du -h "${BREW_PAYLOAD}" | cut -f1))"
+else
+  echo "  FAIL  ${BREW_PAYLOAD} missing — brew.yml did not bake the bundle"
+  exit 1
+fi
+
 echo "--- files-verify complete — all checks passed ---"
