@@ -1,52 +1,64 @@
 #!/usr/bin/env bash
-# halcyon brew bundle installer (runs once at first login)
+# halcyon brew bundle installer (runs once at first login via brew-bundle.service)
+#
+# Design:
+#  - brew-setup.service (system, root, basic.target) extracts the tarball to
+#    /home/linuxbrew/.linuxbrew BEFORE any user session starts.
+#  - This script therefore expects brew to already be present; if it is not,
+#    it waits briefly in case of an unusually slow first boot.
+#  - brew bundle is retried up to 3 times with linear back-off for transient
+#    network failures at session start-up.
 set -euo pipefail
 
-BREW="/home/linuxbrew/.linuxbrew/bin/brew"
-BREWFILE="/usr/share/ublue-os/homebrew/Brewfile"
+readonly BREW="/home/linuxbrew/.linuxbrew/bin/brew"
+readonly BREWFILE="/usr/share/ublue-os/homebrew/Brewfile"
 
-echo "=== Halcyon Homebrew Bundle Initialization ==="
+echo "=== Halcyon: brew-bundle one-shot installation ==="
 
-# 1. Wait for Homebrew binary to be available (in case brew-setup.service is extracting)
+# --- Sanity: Brewfile must be present (shipped in the image) ---
+if [[ ! -f "${BREWFILE}" ]]; then
+  echo "ERROR: ${BREWFILE} not found in the image — cannot install packages." >&2
+  exit 1
+fi
+
+# --- Wait for brew binary (brew-setup.service runs before user sessions, but
+#     on an extremely slow first boot it may still be extracting the tarball) ---
 if [[ ! -x "${BREW}" ]]; then
-  echo "Homebrew binary not yet found; waiting for brew-setup.service..."
-  timeout=120
-  while [[ ! -x "${BREW}" && ${timeout} -gt 0 ]]; do
+  echo "INFO: Homebrew binary not yet present; waiting for brew-setup.service to finish (up to 60s)..."
+  waited=0
+  while [[ ! -x "${BREW}" && ${waited} -lt 60 ]]; do
     sleep 2
-    timeout=$((timeout - 2))
+    waited=$((waited + 2))
   done
 fi
 
 if [[ ! -x "${BREW}" ]]; then
-  echo "ERROR: ${BREW} not found or not executable after 120s timeout." >&2
+  echo "ERROR: ${BREW} not found or not executable after 60s — brew-setup.service may have failed." >&2
+  echo "       Run:  systemctl status brew-setup.service" >&2
   exit 1
 fi
 
-if [[ ! -f "${BREWFILE}" ]]; then
-  echo "ERROR: ${BREWFILE} not found." >&2
-  exit 1
-fi
-
+# --- Suppress brew telemetry and noise ---
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_ANALYTICS=1
 export HOMEBREW_NO_ENV_HINTS=1
 
-# 2. Run brew bundle with automatic retry on transient failure (e.g. initial network bringup)
-max_attempts=5
-attempt=1
-delay=5
+# --- Run brew bundle with linear-backoff retries for transient network issues ---
+readonly MAX_ATTEMPTS=3
+readonly RETRY_DELAY=15  # seconds between retries
 
-while [[ ${attempt} -le ${max_attempts} ]]; do
-  echo "Executing: brew bundle --no-lock --file=${BREWFILE} (attempt ${attempt}/${max_attempts})"
+for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
+  echo "INFO: brew bundle --no-lock --file=${BREWFILE}  (attempt ${attempt}/${MAX_ATTEMPTS})"
   if "${BREW}" bundle --no-lock --file="${BREWFILE}"; then
-    echo "Brew bundle installation succeeded!"
+    echo "OK: All Homebrew packages installed successfully."
     exit 0
   fi
-  echo "WARN: brew bundle failed on attempt ${attempt}. Retrying in ${delay}s..." >&2
-  sleep "${delay}"
-  attempt=$((attempt + 1))
-  delay=$((delay * 2))
+  if [[ ${attempt} -lt ${MAX_ATTEMPTS} ]]; then
+    echo "WARN: brew bundle failed on attempt ${attempt}; retrying in ${RETRY_DELAY}s..." >&2
+    sleep "${RETRY_DELAY}"
+  fi
 done
 
-echo "ERROR: Failed to install brew bundle packages after ${max_attempts} attempts." >&2
+echo "ERROR: brew bundle failed after ${MAX_ATTEMPTS} attempts." >&2
+echo "       Inspect the journal:  journalctl --user -u brew-bundle.service" >&2
 exit 1

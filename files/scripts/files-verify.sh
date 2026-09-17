@@ -40,17 +40,25 @@ else
   exit 1
 fi
 
-if grep -q '/home/linuxbrew/.linuxbrew/bin' "${IMAGE_PATH_SH}"; then
-  echo "  PASS  Homebrew PATH export present in ${IMAGE_PATH_SH}"
+if grep -q '/usr/libexec/halcyon-image' "${IMAGE_PATH_SH}"; then
+  echo "  PASS  halcyon helper-scripts PATH export present in ${IMAGE_PATH_SH}"
 else
-  echo "  FAIL  Homebrew PATH export missing from ${IMAGE_PATH_SH}"
+  echo "  FAIL  /usr/libexec/halcyon-image PATH missing from ${IMAGE_PATH_SH}"
   exit 1
 fi
 
+# Brew PATH for non-login sessions (Wayland, GUI apps, systemd --user) lives in
+# environment.d — brew.sh (from Bazzite base) covers interactive login shells.
 if [[ -f "${BREW_ENV}" ]]; then
   echo "  PASS  ${BREW_ENV} present"
+  if grep -q '/home/linuxbrew/.linuxbrew/bin' "${BREW_ENV}"; then
+    echo "  PASS  Homebrew bin PATH entry present in ${BREW_ENV}"
+  else
+    echo "  FAIL  Homebrew bin PATH entry missing from ${BREW_ENV}"
+    exit 1
+  fi
 else
-  echo "  FAIL  ${BREW_ENV} missing"
+  echo "  FAIL  ${BREW_ENV} missing — brew packages will be invisible to Wayland/GUI apps"
   exit 1
 fi
 

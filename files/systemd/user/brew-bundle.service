@@ -1,14 +1,22 @@
 [Unit]
 Description=Install halcyon Homebrew formulas (once, at first login)
+Documentation=https://github.com/aahsnr-work/halcyon
+# brew-setup.service (system, basic.target) extracts the tarball before any
+# user session starts, so the brew binary is available by the time this fires.
 Wants=network-online.target
 After=network-online.target
+# Run only once: skip if the sentinel file already exists.
 ConditionPathExists=!%h/.config/halcyon/.brew-bundle-done
 
 [Service]
 Type=oneshot
+# Ensure the sentinel directory exists before we start.
 ExecStartPre=/usr/bin/mkdir -p %h/.config/halcyon
 ExecStart=/usr/libexec/halcyon-image/brew-bundle-install
+# Write sentinel only on success (ExecStartPost runs only when ExecStart exits 0).
 ExecStartPost=/usr/bin/touch %h/.config/halcyon/.brew-bundle-done
+# Give brew bundle plenty of time to download and install all packages.
+TimeoutStartSec=600
 
 [Install]
 WantedBy=default.target
