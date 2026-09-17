@@ -67,8 +67,10 @@ readonly MAX_ATTEMPTS=3
 readonly RETRY_DELAY=15  # seconds between retries
 
 for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
-  echo "INFO: brew bundle --no-lock --file=${BREWFILE}  (attempt ${attempt}/${MAX_ATTEMPTS})"
-  if "${BREW}" bundle --no-lock --file="${BREWFILE}"; then
+  # Homebrew 6 bundle requires the `install` subcommand; no lock file is
+  # written anymore, so --file inside read-only /usr is safe.
+  echo "INFO: brew bundle install --file=${BREWFILE}  (attempt ${attempt}/${MAX_ATTEMPTS})"
+  if "${BREW}" bundle install --file="${BREWFILE}"; then
     echo "OK: All Homebrew packages installed successfully."
     exit 0
   fi

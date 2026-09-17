@@ -77,13 +77,15 @@ echo "::endgroup::"
 echo "::group::install-brew-bundle — brew bundle (network, with retries)"
 # No HOMEBREW_NO_AUTO_UPDATE here: the tarball's formula metadata is stale,
 # and we want current bottles at build time. Auto-update fetches them.
+# Homebrew 6 bundle requires the `install` subcommand and dropped --no-lock
+# (no lock file is written anymore).
 for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
   echo "--- brew bundle attempt ${attempt}/${MAX_ATTEMPTS} ---"
   if setpriv --reuid="${BREW_UID}" --regid="${BREW_UID}" --clear-groups \
     env HOME="${BREW_HOME}" \
     HOMEBREW_NO_ANALYTICS=1 \
     HOMEBREW_NO_ENV_HINTS=1 \
-    "${PREFIX}/bin/brew" bundle --no-lock --file="${BREWFILE}"; then
+    "${PREFIX}/bin/brew" bundle install --file="${BREWFILE}"; then
     echo "  OK    brew bundle completed on attempt ${attempt}"
     break
   fi
