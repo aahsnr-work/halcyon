@@ -1,186 +1,262 @@
 # halcyon
 
-An atomic Linux desktop image booting directly into Hyprland with NVIDIA open drivers, a gaming kernel, and curated developer tooling. Rebuilt daily — calm, by definition.
+A lean, Hyprland-first gaming fork of [Bazzite](https://bazzite.gg), built with
+[BlueBuild](https://blue-build.org). GNOME is fully removed; the desktop is
+**Hyprland (`hyprland-git`) + Noctalia (`noctalia-git`)** with **greetd + tuigreet**
+login. NVIDIA open drivers, the Bazzite gaming stack, and a curated dev toolchain
+are baked in — rebuilt daily, calm by definition.
 
-Published to: `ghcr.io/aahsnr-work/halcyon:latest`
-
----
-
-## 1. Overview & Identity
-
-**halcyon** is a lean, custom fork of `ghcr.io/ublue-os/bazzite-gnome-nvidia-open:latest`. It preserves Bazzite's gaming stack, kernel optimizations, and NVIDIA driver layers, while removing GNOME entirely in favor of a pure **Hyprland** (`hyprland-git`) + **Noctalia** (`noctalia-git`) environment managed by **greetd** and **tuigreet**.
-
-### Base & Tag Policy
-- **Upstream Base**: `ghcr.io/ublue-os/bazzite-gnome-nvidia-open:latest` (Fedora Silverblue/Atomic base with akmods NVIDIA open drivers)
-- **Image Version**: `latest`
-- **Architectures**: `linux/amd64`
+> **Image:** `ghcr.io/aahsnr-work/halcyon:latest` (tracks `bazzite-gnome-nvidia-open:latest`; `linux/amd64` only)
+> **Recipe:** [`recipes/halcyon.yml`](recipes/halcyon.yml) (multi-file: ordered `from-file:` includes under `recipes/modules/`)
 
 ---
 
-## 2. Component Auditing: Removed vs. Kept vs. Added
+## Install / rebase
 
-### Removed Components
-halcyon aggressively strips desktop bloat, handheld/Deck daemons, and redundant runtimes:
-- **GNOME Core & Desktop Apps**: `gnome-shell`, `mutter`, `gdm`, `gnome-session`, `gnome-session-wayland-session`, `nautilus`, `ptyxis`, `gnome-control-center`, `gnome-settings-daemon`, `gjs`, `xdg-desktop-portal-gnome`, and all desktop utilities (`gnome-terminal`, `gnome-calculator`, `gnome-calendar`, `evince`, `loupe`, `totem`, `snapshot`, etc.).
-- **GNOME Extensions**: Both RPM packages (`gnome-shell-extension-user-theme`, `gnome-shell-extension-gsconnect`, `nautilus-gsconnect`, `gnome-search-yafti`, `gnome-rounded-blur`) and the 12 directory-installed extensions under `/usr/share/gnome-shell/extensions` (`logomenu`, `compiz-*`, `hotedge`, `blur-my-shell`, `burn-my-windows`, etc.).
-- **Display Manager**: `sddm` (masked or removed if dependency-free) and `gdm` (masked) replaced by `greetd` + `tuigreet`.
-- **Handheld & Steam Deck Stack**: `inputplumber`, `steamos-manager-powerstation`, `jupiter-fan-control`, `jupiter-hw-support-btrfs`, `galileo-mura`, `steamdeck-dsp`, `powerbuttond`, `vpower`, `sdgyrodsu`, `hid-replay`, `steamdeck-backgrounds`, `steamdeck-gnome-presets`, and `bazzite-autologin.service`.
-- **Android Integration**: `waydroid` RPM, launcher wrappers, polkit rules, and helper units.
-- **Stock Firefox**: `firefox` and `firefox-langpacks` RPMs, plus Flatpak `org.mozilla.firefox`.
-- **Bling & Fastfetch Stack**: `fastfetch` RPM, `/usr/libexec/bazzite-bling-fastfetch`, `/etc/profile.d/bazzite-neofetch.sh`, and the `bazzite-cli` recipe inside `80-bazzite.just`.
-- **Base Fonts**: Non-essential CJK/lato font RPMs swept via reverse-dependency-filtered script, leaving core fontconfig and DejaVu fallbacks.
-- **Base GNOME Flatpaks**: Removed at first boot via `default-flatpaks@v1` (`org.gnome.*`, `ExtensionManager`, `protontricks`, `Warehouse`, `MissionCenter`, `ProtonPlus`, `Refine`).
+**Fresh ISO:** run the `build-iso` workflow (Actions → build-iso → Run workflow)
+after a green image build, then download the `halcyon-iso` artifact. This is a
+**bootable, installable ISO in the same spirit as the Fedora Workstation ISO**:
+it boots (BIOS + UEFI) into a graphical **Anaconda** installer
+(`bluebuild generate-iso` runs
+[JasonN3/build-container-installer](https://github.com/JasonN3/build-container-installer)
+under the hood — the workflow uses the BlueBuild CLI, which drives JasonN3's
+installer image `v1.4.0`) and installs the exact published
+`ghcr.io/aahsnr-work/halcyon` bootc image onto the chosen disk via Anaconda's
+`ostreecontainer` path — partitioning, user creation and all. It is an
+installer, not a package-based live install, so what lands on disk is
+byte-identical to the published image. A `halcyon.iso-CHECKSUM` file is
+generated alongside. Caveats: the ISO is large (the compressed base image is
+embedded, ~6+ GB) and too big for free GitHub Releases hosting → delivered as
+a workflow artifact; the GHCR package must be public (or the runner
+authenticated) for the pull to succeed; on Secure Boot systems, enroll the
+Universal Blue MOK after first boot for the NVIDIA akmods — see Bazzite's
+Secure Boot docs. Locally you can also run:
+`sudo bluebuild generate-iso --iso-name halcyon.iso image ghcr.io/aahsnr-work/halcyon`
 
-### Kept Components (Gaming Core & Platform Managers)
-halcyon deliberately preserves Bazzite's verified gaming and hardware machinery:
-- **Gaming Core**: `steam` (patched, desktop files rewired to `/usr/bin/bazzite-steam`), `umu-launcher`, `umu-wrapper`, `terra-gamescope`, `gamescope-session-ogui-steam`, `gamemode` + `gamemode-news-hook`, `terra-mangohud`, `lutris`, and `bazaar` (RPM).
-- **System Managers & sched_ext**: `steamos-manager` (system and user units kept; platform.toml patched to `desktop = "hyprland.desktop"`), `scx-scheds`, `scx-tools`.
-- **Peripheral & Hardware Tooling**: `usbip`, `xwiimote-ng`, `evtest`, `ydotool`, `input-remapper`, distrobox, podman, and the `ujust install-openrazer` recipe.
-- **NVIDIA Machinery**: `ublue-nvidia-flatpak-runtime-sync`, `ublue-nvidia-flatpak-runtime-verify`, `ublue-nvctk-cdi`, akmods kmods.
-- **DistroShelf Support**: Base skel preconfiguration (`/etc/skel/.var/app/com.ranfdev.DistroShelf/`), `distroshelf-helper`, and `mineapps.list` kept to support the system Flatpak.
-- **System Repos**: Base repo files (`terra`, `terra-extras`, `che/nerd-fonts`, etc.) are left in their default disabled state.
+**Rebase from an existing Atomic desktop (Bazzite/Silverblue/Bluefin/Kinoite):**
 
-### Added Components
-- **Desktop Environment**:
-  - Hyprland (`hyprland-git`) + Noctalia Shell (`noctalia-git`) from COPR `lionheartp/Hyprland`.
-  - `greetd` + `greetd-tuigreet` (configured with `user = "greetd"` and cached session persistence).
-  - Portals: `xdg-desktop-portal-hyprland`, `xdg-desktop-portal-gtk`, and `qt6-qtwayland`.
-  - `hyprpolkitagent` and `hyprland-qt-support`.
-- **Applications (via DNF)**:
-  - `code` (Visual Studio Code official Microsoft repository).
-  - `brave-browser` and `brave-origin` (Brave official repository).
-  - `zen-browser` (COPR `sneexy/zen-browser`).
-  - `zed` (installed via temporary enable of base `terra` repository).
-  - `emacs-pgtk` (Fedora official, supporting Doom Emacs).
-- **Baked Tooling (Build-time Installers)**:
-  - `Obsidian`: Extracted AppImage baked to `/usr/lib/obsidian` with system desktop integration.
-  - `Zotero`: Official tarball installed to `/usr/lib/zotero` with `DisableAppUpdate` policy.
-  - `Pyprland`: Built into dedicated Python virtualenv `/usr/lib/pyprland`, compiled C-client helper, and global user systemd service `pyprland.service`.
-  - `TeX Live`: `scheme-medium` installed via `install-tl` into `/usr/lib/texlive` with `latexmk` and `biber` baked in.
-- **System Flatpaks (First-Boot `default-flatpaks@v1`)**:
-  - `com.ranfdev.DistroShelf`
-  - `com.github.tchx84.Flatseal`
-  - `org.onlyoffice.desktopeditors`
-  - `com.bitwarden.desktop`
-  - `com.ticktick.TickTick`
-- **Declarative Nix Stack**: fu5ha/winter pattern with multi-user `nix-daemon`, `/var/nix` bind mount to `/nix`, and home-resolution profile scripts.
-- **Homebrew Automation**: First-login one-shot user service (`halcyon-brew-bundle.service`) installing 21 formulas from `halcyon.Brewfile`.
-- **Dotfiles**: `chezmoi` integrated with `https://github.com/aahsnr-configs/dots` (`file-conflict-policy: replace`).
-- **Helpers**: Fuzzy config finder (`fconf`) and fuzzy file editor (`fe`) in `/usr/libexec/halcyon-image` exported to `$PATH`.
-- **Custom Just Recipes**: `ujust doom-setup` and `ujust home-manager-setup`.
-
----
-
-## 3. Critical Architectural Rules & Pitfalls
-
-### The `--repoid` Dependency Confinement Trap (§1.21)
-> [!WARNING]
-> **Never use `repo:`-scoped package definitions in BlueBuild DNF modules.**
->
-> BlueBuild executes `repo:`-scoped entries using `dnf5 -y --setopt=install_weak_deps=False install --repoid <repo> <pkg>`. In DNF5, `--repoid` confines the **entire transaction, including dependency resolution**, strictly to that single repository. Fedora and updates repos become invisible, causing DNF to fail resolving system libraries (SDL2, X11, glib, qt6) and fall back to broken multilib candidates.
->
-> **Policy**: halcyon always enables repositories for the whole unscoped transaction using unique package names (`code`, `brave-browser`, `zen-browser`, `zed`, `hyprland-git`), cleans up repo files immediately afterwards, and enforces provenance post-install via `dnf -q repoquery --installed --qf '%{name} from %{reponame}'`.
-
-### Flatpak Policy & Fedora Remotes
-- Flatpaks live in `/var/lib/flatpak`, outside OSTree commits. They cannot be pruned at container build time.
-- Removals and additions are handled idempotently at first boot via `default-flatpaks@v1`.
-- Bazzite includes disabled Fedora Flatpak remotes by default (`flatpak-add-fedora-repos.service`). halcyon retains this base design. For users desiring total elimination of Fedora Flatpak remote definitions, an optional systemd drop-in is provided in `files/systemd/system/flatpak-add-fedora-repos.service.d/10-halcyon.conf` (see §7.6 of `prompt.md`).
-
-### Sched_ext & BORE Kernel Caveat
-- `scx-scheds` and `scx-tools` are kept from the base image. `scx_loader.service` is disabled by default.
-- Users can inspect and toggle schedulers via `scxctl`.
-- **BORE** (Burst-Oriented Response Enhancer) is a CachyOS custom kernel patch and is **not** present in Fedora/Bazzite kernels. Users desiring equivalent responsiveness should explore sched_ext schedulers such as `scx_bppland` or `scx_lavd`.
-
-### XDG Autostart under Hyprland
-- Hyprland does not natively parse or execute `/etc/xdg/autostart/*.desktop` files.
-- While Steam's autostart desktop file is preserved at `/etc/xdg/autostart/steam.desktop`, users should configure autostart in their Hyprland configuration (e.g. `exec-once = bazzite-steam -silent %U`) or rely on Noctalia's session startup.
-
-### Terminal Notice
-- With the removal of `ptyxis` and `gnome-terminal`, no terminal emulator is baked into the base image by default.
-- Users should ensure their chezmoi dotfiles, Home-Manager configuration, or additional DNF packages install their preferred terminal (e.g. `kitty`, `foot`, `alacritty`, or `wezterm`).
-
----
-
-## 4. Mandatory Documented Deviations (§11)
-
-1. **`gnome-extensions` Module Avoided**: The BlueBuild `gnome-extensions` module unconditionally executes `gnome-shell --version` during build, causing immediate failure once GNOME is removed. Extensions are cleanly removed via DNF and directory purging.
-2. **Terra Repository Handling**: The `terra` repository already exists (disabled) in the base image. halcyon does not add or delete terra repo files; instead, it uses an enable → install (`zed`) → disable sandwich.
-3. **Flatpak Removal Timing**: Flatpak states reside in `/var` and cannot be modified inside immutable image layers. `default-flatpaks@v1` handles removals at first boot.
-4. **Weak Dependencies in Nix**: Added `install-weak-deps: false` to the fu5ha/winter Nix DNF module to adhere to halcyon's strict lean packaging rules.
-5. **Fedora Flatpak Remotes**: Left in place (disabled) per upstream Bazzite design; optional hardening unit available.
-6. **`default-flatpaks@v1` Pinned**: BlueBuild `default-flatpaks@v2` lacks `remove:` support. Version 1 is used to provide both system installs and base GNOME Flatpak removals.
-7. **Removals Split into DNF vs Guarded Scripts**: BlueBuild's DNF module hard-fails on missing packages. Confirmed packages are removed declaratively; compose-variable candidates are handled via `rpm -q`-guarded scripts with hard assertion testing.
-8. **`steamos-manager` Retained**: Kept because it manages TDP and `scx` schedulers; its desktop configuration is patched from `gnome.desktop` to `hyprland.desktop`.
-9. **`type: script@v1` Pinned**: Plain `type: script` resolves to v2 which runs under `/bin/sh`. All halcyon snippets require bash and pin `script@v1`.
-10. **Greetd User Set to `greetd`**: Fedora's greetd package modifies upstream's `greeter` user to `greetd`. Configuring `greeter` would fail authentication.
-11. **Banning of `repo:`-Scoped Installs**: Due to the DNF5 `--repoid` dependency resolution trap (§1.21), all packages are installed with whole-transaction visibility.
-12. **DistroShelf as System Flatpak**: Delivered as `com.ranfdev.DistroShelf` from Flathub via `default-flatpaks@v1`, avoiding fragile custom RPM packaging while keeping base helper integrations.
-
----
-
-## 5. Deployment, Verification & Rebase Flow
-
-### Rebase to halcyon
-To switch an existing Fedora Silverblue or Bazzite installation to halcyon:
-
-1. **Unverified Rebase** (first boot to pull public key and container policies):
-   ```bash
-   rpm-ostree rebase ostree-unverified-registry:ghcr.io/aahsnr-work/halcyon:latest
-   systemctl reboot
-   ```
-
-2. **Signed Verification Rebase** (enforcing cosign signature verification):
-   ```bash
-   rpm-ostree rebase ostree-image-signed:docker://ghcr.io/aahsnr-work/halcyon:latest
-   systemctl reboot
-   ```
-
-### Verifying Image Signatures Locally
 ```bash
-cosign verify --key cosign.pub ghcr.io/aahsnr-work/halcyon:latest
+# 1. rebase to the unsigned image first
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/aahsnr-work/halcyon:latest
+systemctl reboot
+# 2. after reboot, switch to the signed tag
+rpm-ostree rebase ostree-image-signed:docker://ghcr.io/aahsnr-work/halcyon:latest
+systemctl reboot
 ```
 
-### Secure Boot Enrollment
-halcyon inherits NVIDIA kernel modules signed by Universal Blue's akmods keys. If Secure Boot is enabled on your machine:
-1. Ensure the Universal Blue MOK key is enrolled in your UEFI firmware (`/etc/pki/akmods/certs/akmods-ublue.der`).
-2. Follow Bazzite's official [Secure Boot Guide](https://docs.bazzite.gg/Installing_and_Managing_Software/Secure_Boot/) to enroll the key via `mokutil`.
+**Verify a build:**
 
-### ISO Generation
-To create a bootable standalone ISO from the published container image:
-- Trigger the `.github/workflows/build-iso.yml` workflow manually in GitHub Actions, or
-- Run locally with rootful Podman:
-  ```bash
-  sudo bluebuild generate-iso --iso-name halcyon.iso image ghcr.io/aahsnr-work/halcyon
-  ```
+```bash
+cosign verify --key cosign.pub ghcr.io/aahsnr-work/halcyon
+```
+
+**Secure Boot:** the base's ublue akmods NVIDIA modules require the Universal
+Blue MOK key enrolled when Secure Boot is on — see
+[Bazzite's Secure Boot documentation](https://secureblue.dev/install-with-secureboot
+and the Bazzite docs) for enrollment steps.
 
 ---
 
-## 6. User Setup & Extension Points (`TODO(user)`)
+## What this image is
 
-- **Custom Application RPMs**: Add additional packages directly to the designated `TODO(user)` block in [`recipes/modules/apps.yml`](recipes/modules/apps.yml) (plain names only).
-- **Dotfiles**: Managed automatically via [aahsnr-configs/dots](https://github.com/aahsnr-configs/dots) using chezmoi.
-- **Doom Emacs**: After first login, run:
-  ```bash
-  ujust doom-setup
-  ```
-  *(Requires user SSH keys configured for GitHub).*
-- **Nix Home Manager**: After first login, bootstrap Home Manager via:
-  ```bash
-  ujust home-manager-setup
-  ```
-- **Branding Assets**:
-  - Replace Plymouth theme graphics in [`files/system/usr/share/plymouth/themes/halcyon/`](files/system/usr/share/plymouth/themes/halcyon/).
-  - Customize MOTD text in [`files/system/etc/motd.d/halcyon-motd.txt`](files/system/etc/motd.d/halcyon-motd.txt).
-  - Add wallpaper images to [`files/system/usr/share/backgrounds/halcyon/`](files/system/usr/share/backgrounds/halcyon/).
+Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base image is
+`ghcr.io/ublue-os/bazzite-gnome-nvidia-open:latest`, so everything below is
+*relative to Bazzite's GNOME NVIDIA-open image*.
+
+### Removed
+
+- **GNOME core & apps** — gnome-shell, mutter, gdm, gnome-session(+wayland), nautilus,
+  ptyxis, gnome-control-center, gnome-settings-daemon, gjs, xdg-desktop-portal-gnome,
+  firefox RPM (+langpacks), plus the compose-variable GNOME app set
+  (evince/loupe/totem/gnome-calculator/… — removed via rpm-filtered script with
+  hard verification, not a brittle declarative list).
+- **GNOME extensions** — the RPM ones (`gnome-shell-extension-{gsconnect,user-theme}`,
+  yafti, rounded-blur, …) via dnf; the 12 directory-installed ones
+  (`blur-my-shell`, `burn-my-windows`, `desktop-cube`, `dash-to-dock`-style set,
+  `appindicator`, …) via `rm -rf /usr/share/gnome-shell/extensions` + gschema
+  recompile. The BlueBuild `gnome-extensions` module is intentionally NOT used
+  (it hard-requires `gnome-shell --version` at build time — see NOTES §deviation 1).
+- **GNOME config footprint** — dconf `distro.d` bazzite databases, the 5
+  silverblue gschema overrides, gnome-background-properties, default wallpaper
+  symlinks, dconf-update.service, GNOME mimeapps handlers, Ptyxis skel,
+  gnome-ssh-askpass, GNOME motd tip, firefox GNOME config.
+- **Display manager** — SDDM config purged (`/etc/sddm.conf.d`), sddm/gdm services
+  masked; replaced by greetd + tuigreet (see Added).
+- **Handheld / Deck stack** — inputplumber, steamos-manager-powerstation,
+  jupiter-fan-control, jupiter-hw-support-btrfs, galileo-mura, steamdeck-dsp,
+  powerbuttond, vpower, sdgyrodsu, hid-replay, steamdeck-backgrounds,
+  steamdeck-gnome-presets, and their dangling service symlinks.
+- **Android** — Waydroid packages + its full file footprint (launchers, polkit
+  policy/rules, waydroid ujust recipe).
+- **Bling/fastfetch stack** — fastfetch RPM, `/usr/libexec/bazzite-bling-fastfetch`,
+  `bazzite-neofetch.sh` profile hook, `bazzite-cli/bling.{sh,fish}`, and the
+  `bazzite-cli` ujust recipe (excised from `80-bazzite.just`).
+- **Base Flatpak app set** — removed at first boot via `default-flatpaks@v1`
+  remove list (firefox, Extension Manager, Protontricks, Warehouse, Mission
+  Center, ProtonPlus, the org.gnome.* app set, Refine). **Except** Flatseal and
+  DistroShelf, which are kept/re-added (see Flatpak policy).
+- **Base font RPMs** — Bazzite's `twitter-twemoji-fonts`,
+  `google-noto-sans-cjk-fonts`, `lato-fonts`, `fira-code-fonts`, `nerd-fonts` are
+  removed via a reverse-dependency-filtered script. Replaced by the fonts module
+  (below). ⚠ **CJK coverage is lost** — re-add `google-noto-sans-cjk-fonts` in
+  `removals`-adjacent dnf step if you need CJK glyphs.
+
+### Kept (the Bazzite gaming core)
+
+- **sched_ext / performance:** `scx-scheds`, `scx-tools` (`scx_loader.service`
+  stays disabled by default — see sched_ext note). ⚠ **Base variance:** the
+  published `bazzite-gnome-nvidia-open:latest` stable image at delivery time
+  (2026-09-17) does **not** ship `steamos-manager`/its `-powerstation` subpackage
+  contents beyond what main's audit described, `gamemode`, or
+  `gamescope-session-ogui-steam` (the stable channel lags bazzite main, which
+  does have them). The removal logic treats them as conditional keepers —
+  if a future base re-adds them, they are kept (only the `-powerstation`
+  subpackage is removed and the stale `desktop = "gnome.desktop"` patched to
+  `hyprland.desktop` when present). See NOTES.md §5 for the full variance table;
+  use the TODO app list if you want them re-added explicitly.
+- **Gaming:** `steam` (bazzite-patched, `/usr/bin/bazzite-steam`), `terra-gamescope`
+  (+libs), `terra-mangohud` (x86_64+i686), `umu-launcher`/`umu-wrapper`, `lutris`,
+  `bazaar` (RPM), `bazzite-portal`, `bbrew`, `distroshelf-helper` (kept file).
+- **Peripherals:** `usbip`, `xwiimote-ng`, `evtest`, `ydotool`, `input-remapper`
+  (service disabled in base — unchanged), opt-in `ujust install-openrazer`.
+- **Containers:** distrobox + podman (+ user podman socket), `/etc/distrobox`.
+- **DistroShelf** — kept as the **system Flatpak** `com.ranfdev.DistroShelf`
+  (v4 decision; no stage build), including the base's skel preconfig and
+  `/usr/bin/distroshelf-helper`.
+- **NVIDIA userland glue:** `ublue-nvidia-flatpak-runtime-sync`/`-verify`,
+  `ublue-nvctk-cdi`, akmods COPR repo re-enabled at the end (base behavior).
+- **Base repo files** — every repo file Bazzite ships stays, in its final
+  enabled/disabled state. halcyon adds and removes its own repos cleanly
+  (see the --repoid trap).
+- All other stock ujust recipes (`10-update`, `81-fixes`, `82-apps`, `82-beesd`,
+  `82-cockpit`, `82-sunshine`, `83-audio`, `84-virt`, `85-image`, `86-windows`,
+  `87-framegen`, `88-webapps`, `89-mesa-git`, `90-picker`, `92-verify`,
+  `93-update`, `94-protonplus`, `95-bazzite-nvidia`), minus the waydroid/decky/
+  deck-session/de ones that reference removed subsystems.
+
+### Added
+
+- **Desktop stack** (from COPR `lionheartp/Hyprland`, install is *unscoped* —
+  plain package names with the COPR enabled for the whole transaction, provenance
+  verified after, COPR repo file purged):
+  `hyprland-git`, `noctalia-git`, `hyprpolkitagent`, `hyprland-qt-support`,
+  `xdg-desktop-portal-hyprland`, `xdg-desktop-portal-gtk`, `qt6-qtwayland`.
+- **Login:** `greetd` + `tuigreet` (Fedora binary package `tuigreet`; greeter user
+  is `greetd`). Config in `/etc/greetd/config.toml`; session list from
+  `/usr/share/wayland-sessions`; cache dir `/var/cache/tuigreet` created via
+  tmpfiles (tuigreet's hardcoded cache location — it has no `--cache` flag).
+- **Browsers/editors (dnf module, repos cleaned up after):** `code` (Microsoft
+  repo), `brave-browser` + `brave-origin` (Brave repo), `zen-browser`
+  (**COPR `sneexy/zen-browser`, by user directive** — installed in a COPR-only
+  transaction so terra, which also packages it, can't win dnf's arbitration),
+  `zed` (from the base's pre-existing disabled `terra` repo via
+  enable→install→re-disable), `emacs-pgtk` (Fedora).
+- **Baked apps (build-time scripts):** Obsidian (AppImage → `/usr/lib/obsidian`),
+  Zotero (`/usr/lib/zotero`, auto-update disabled), Pyprland (pip venv →
+  `/usr/lib/pyprland`, user service), TeX Live scheme-medium (+latexmk, biber →
+  `/usr/lib/texlive`, from a pinned CTAN mirror for reproducible builds). `gcc`,
+  `perl`, `jq`, `python3` are deliberately kept (emacs-pgtk native-comp requires
+  gcc at runtime; tlmgr/jq/venv runtime needs — see NOTES.md §4 S).
+- **First-boot system Flatpaks:** DistroShelf, Flatseal, OnlyOffice DesktopEditors,
+  Bitwarden, TickTick.
+- **Nix** (pattern from [fu5ha/winter](https://github.com/fu5ha/winter), Apache-2.0):
+  `nix` + `nix-daemon` RPMs, `/var/nix` bind-mounted on `/nix` (`var-nix.service`
+  + `nix.mount`), tmpfiles for store dirs, profile hook. Home-Manager is NOT
+  baked — run `ujust home-manager-setup` after first login.
+- **Homebrew:** the base's bare brew payload is untouched; 21 formulas install at
+  first login via the `brew-bundle.service` user service reading
+  `/usr/share/ublue-os/homebrew/Brewfile`
+  (atuin bat btop bun cava chafa direnv dust eza fd fzf gnuplot lazygit pandoc
+  pixi ripgrep starship tealdeer uv yazi zellij). `ujust bazzite-cli` is gone;
+  these are the CLI tools of the image.
+- **Dotfiles:** BlueBuild `chezmoi` module →
+  `https://github.com/aahsnr-configs/dots`, `file-conflict-policy: replace`,
+  applied at first login for every user (and updated daily).
+- **ujust recipes:** `ujust doom-setup` (clones your Doom config via SSH and
+  installs Doom Emacs — needs your SSH keys) and `ujust home-manager-setup`
+  (bootstraps standalone Home Manager) — shipped via the `justfiles` module,
+  surfaced through `/usr/share/ublue-os/just/60-custom.just`.
+- **Helpers:** `fconf` and `fe` (fuzzy fd/fzf/bat file finders) in
+  `/usr/libexec/halcyon-image/`, on PATH via `/etc/profile.d/image-path.sh`.
+- **Fonts:** Nerd Fonts `JetBrainsMono` + `NerdFontsSymbolsOnly`; Google
+  `JetBrains Mono`, `Noto Emoji`, `Noto Color Emoji`.
 
 ---
 
-## 7. Credits & Upstream Attribution
+## Flatpak policy
 
-- **Universal Blue & Bazzite**: [bazzite.gg](https://bazzite.gg) / [ublue-os/bazzite](https://github.com/ublue-os/bazzite) (Apache-2.0).
-- **BlueBuild**: [blue-build.org](https://blue-build.org) (Apache-2.0).
-- **fu5ha/winter**: Declarative Nix on OSTree integration patterns (Apache-2.0).
-- **lionheartp/Hyprland COPR**: Upstream Hyprland and Noctalia packaging for Fedora.
-- **sneexy/zen-browser COPR**: Zen Browser RPM packaging.
-- **DistroShelf**: [ranfdev/DistroShelf](https://github.com/ranfdev/DistroShelf) (GPL-3.0).
-- **JasonN3/build-container-installer**: Underlying engine for BlueBuild ISO generation.
+`default-flatpaks@v1` (v2 has no `remove:` support). Install/remove lists apply
+**at first boot, idempotently** (flatpak state lives in `/var`, outside OSTree
+commits — a build-time flatpak module does not exist). `bazzite-flatpak-manager`
+stays enabled; it installs nothing, it only enforces remotes/blocklist/EOL
+cleanup. The `fedora`/`fedora-testing` flatpak remotes exist-but-disabled — that
+is the base's deliberate design (unit `flatpak-add-fedora-repos.service` adds
+flathub + the fedora remotes disabled); they are left as-is.
+
+## sched_ext status
+
+`sched_ext` is in the base kernel with `scx-scheds`/`scx_tools` kept and
+`scx_loader.service` disabled by default (as shipped). Use `scxctl` or enable
+`scx_loader.service` to try schedulers. ⚠ `BORE` is a CachyOS kernel patch and is
+NOT on Fedora kernels — the nearest sched_ext equivalent is `scx_bpfland`.
+
+## Known caveats
+
+- **XDG autostart:** Hyprland does not run `/etc/xdg/autostart` natively. Let
+  Noctalia handle XDG autostart or add `exec-once` lines in your Hyprland config.
+  (The base's `/etc/xdg/autostart/steam.desktop` autostart entry is absent in
+  the current stable base — launch Steam from Noctalia/your own autostart.)
+- **Base-channel variance:** the published stable base lags bazzite main — it
+  currently ships no `gamemode`, no `gamescope-session-plus` sessions, and no
+  `steamos-manager`. The recipes keep them if a future base re-adds them
+  (removal logic is conditional); see NOTES.md §5 for the full variance table
+  and how to re-add them explicitly via the TODO app list if you want them now.
+- **No terminal is baked** — GNOME Terminal/Console/Ptyxis are gone by design and
+  none is invented for you. Your chezmoi dots + Brewfile own this; add one via
+  the TODO extension point in `apps.yml` if you want a GUI terminal in the image.
+- **Obsidian version:** Obsidian's GitHub `releases/latest` is periodically
+  mobile-only (no AppImage). `install-obsidian.sh` handles this by falling back
+  to a known-good pinned release (v1.8.7). Update the fallback URL when you
+  refresh the image, or edit the script to query the desktop release channel.
+- **TODO(user) extension points:** personal shell setup (chezmoi repo), branding
+  assets (`files/system/usr/share/plymouth/themes/halcyon/`,
+  `files/system/usr/share/backgrounds/halcyon/`, motd), extra apps
+  (`recipes/modules/apps.yml` bottom section), optional Hyprland companion apps
+  (`recipes/modules/desktop.yml` comment).
+
+## The `--repoid` trap — read before editing
+
+BlueBuild's `dnf` module executes every `repo:`-scoped install entry as
+`dnf5 --repoid <repo> install <pkg>` — and dnf5's `--repoid` confines the
+**entire transaction, dependency resolution included**, to that single
+repository. Fedora/updates become invisible to the solver and installs fail with
+broken i686 multilib candidates. **Never use `repo:`-scoped entries in this
+repo.** Install plain package names with the needed repos enabled for the whole
+transaction (unique names make provenance unambiguous), then verify provenance
+with `rpm -q --qf '%{name} (vendor: %{VENDOR})' <pkgs>` — COPR builds stamp
+`Fedora Copr - user <name>` as their vendor (dnf5's from-repo history is
+unavailable on rpm-ostree-based images). The recipes
+enforce `install-weak-deps: false` everywhere and post-install provenance guards.
+
+## Build & CI
+
+- `build.yml` (daily cron 08:00 UTC, push, PR) → `blue-build/github-action@v1.12`
+  → signs with cosign (`SIGNING_SECRET`) and publishes to GHCR.
+- `build-iso.yml` (manual) → ISO artifact from the published image.
+- dependabot keeps the actions current (daily).
+- Local test build: `bluebuild build recipes/halcyon.yml` (podman).
+
+## Credits & licenses
+
+- [Universal Blue](https://universal-blue.org) & [Bazzite](https://bazzite.gg)
+  (Apache-2.0) — base image and the gaming stack.
+- [BlueBuild](https://blue-build.org) — build system, modules, CI action.
+- [fu5ha/winter](https://github.com/fu5ha/winter) (Apache-2.0) — the nix
+  bind-mount pattern (`var-nix.service`, `nix.mount`, tmpfiles, profile hook).
+- [lionheartp/Hyprland COPR](https://copr.fedorainfracloud.org/coprs/lionheartp/Hyprland/)
+  — `hyprland-git`, `noctalia-git` & friends.
+- [noctalia-shell](https://github.com/noctalia-dev/noctalia-shell) — the desktop.
+- [DistroShelf](https://github.com/ranfdev/DistroShelf) — Flatpak app.
+- [JasonN3/build-container-installer](https://github.com/JasonN3/build-container-installer)
+  — underlies `bluebuild generate-iso`.
+- [tuigreet](https://github.com/apognu/tuigreet) / [greetd](https://git.sr.ht/~kennylevinsen/greetd).

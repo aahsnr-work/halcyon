@@ -22,3 +22,4 @@ doom-setup:
 
     echo
     echo "Doom Emacs is set up. Start it with: emacs"
+

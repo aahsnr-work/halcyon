@@ -1,5 +1,6 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+# files.yml — static tree, ujust recipes, chezmoi dotfiles.
 modules:
   - type: files
     files:
@@ -19,11 +20,5 @@ modules:
     # chezmoi-init applies dots at FIRST LOGIN (only if ~/.local/share/chezmoi absent)
 
   - type: script@v1
-    snippets:
-      - |
-        set -euo pipefail
-        chmod 0755 /usr/libexec/halcyon-image/*
-        test -f /etc/profile.d/halcyon-path.sh
-        command -v chezmoi
-        grep -q 'doom-setup' /usr/share/ublue-os/just/60-custom.just
-        grep -q 'home-manager-setup' /usr/share/ublue-os/just/60-custom.just
+    scripts:
+      - files-verify.sh

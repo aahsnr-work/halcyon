@@ -25,3 +25,4 @@ home-manager-setup:
     echo
     echo "Home Manager is installed and activated. Future updates:"
     echo "  home-manager switch"
+

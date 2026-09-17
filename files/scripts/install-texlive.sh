@@ -32,7 +32,8 @@ EOF
   if [[ -n "${INSTALLER}" && -x "${INSTALLER}" ]]; then
     "${INSTALLER}" \
       -profile "${TEXLIVE_TMP}/texlive.profile" \
-      -no-interaction || echo "WARNING: install-tl exited non-zero" >&2
+      -no-interaction \
+      -repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet || echo "WARNING: install-tl exited non-zero" >&2
   else
     echo "ERROR: install-tl installer executable not found under ${TEXLIVE_TMP}" >&2
     exit 1
@@ -43,7 +44,7 @@ EOF
     # Install additional TeX Live packages via tlmgr during image build
     if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
       echo "Installing additional TeX Live packages via tlmgr: ${EXTRA_TL_PACKAGES[*]}..."
-      "${TEXLIVE_BINDIR}/tlmgr" install "${EXTRA_TL_PACKAGES[@]}" || echo "WARNING: tlmgr package installation exited non-zero" >&2
+      "${TEXLIVE_BINDIR}/tlmgr" --repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet install "${EXTRA_TL_PACKAGES[@]}" || echo "WARNING: tlmgr package installation exited non-zero" >&2
     fi
 
     install -d /etc/profile.d

@@ -1,11 +1,14 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+# brew.yml — 21 formulas via Brewfile + first-login user service.
+# Assets ship via files.yml's files module (Brewfile → image) and the
+# nix.yml systemd module's unit copy (brew-bundle.service →
+# /usr/lib/systemd/user/). One home per asset, no duplicates. The base brew
+# payload is left untouched.
+# NOTE (§5.7): this module runs BEFORE the assets are copied (module order 7 vs
+# 9), so only the base payload is verified here — the full asset verification
+# lives in files-verify.sh (NOTES.md deviation O).
 modules:
   - type: script@v1
-    snippets:
-      - |
-        set -euo pipefail
-        test -f /usr/share/homebrew.tar.zst                      # base brew payload intact (untouched!)
-        test -f /usr/share/ublue-os/homebrew/halcyon.Brewfile
-        test "$(grep -c '^brew ' /usr/share/ublue-os/homebrew/halcyon.Brewfile)" -eq 21
-        test -f /usr/lib/systemd/user/halcyon-brew-bundle.service
+    scripts:
+      - brew-verify.sh

@@ -1,5 +1,6 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+# services.yml — systemd enable/mask (AFTER build-scripts.yml so pyprland.service exists).
 modules:
   - type: systemd
     system:
@@ -14,4 +15,4 @@ modules:
     user:                              # systemctl --global
       enabled:
         - pyprland.service             # from install-pyprland.sh (§6.3)
-        - halcyon-brew-bundle.service  # §7.3
+        - brew-bundle.service  # §7.3

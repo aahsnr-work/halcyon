@@ -1,5 +1,8 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+# branding.yml — os-release identity + plymouth/motd/backgrounds placeholders.
+# Plymouth theme files, motd text and wallpapers are TODO(user) assets (§7.7);
+# no invented logos/wallpapers — fallback to spinner until real assets land.
 modules:
   - type: os-release
     properties:
@@ -9,12 +12,5 @@ modules:
       # ID/ID_LIKE intentionally untouched (fedora-compatible; §1.19k)
 
   - type: script@v1
-    snippets:
-      - |
-        set -euo pipefail
-        grep -q 'PRETTY_NAME="halcyon' /etc/os-release
-        if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-          plymouth-set-default-theme halcyon || plymouth-set-default-theme spinner || true
-        fi
-        test -f /etc/motd.d/halcyon-motd.txt
-        test -d /usr/share/backgrounds/halcyon
+    scripts:
+      - branding-verify.sh

@@ -5,5 +5,5 @@ vt = 1
 source_profile = true
 
 [default_session]
-command = "tuigreet --time --remember --remember-user-session --asterisks --cache /var/cache/tuigreet --sessions /usr/share/wayland-sessions --cmd Hyprland"
+command = "tuigreet --time --remember --remember-user-session --asterisks --sessions /usr/share/wayland-sessions --cmd Hyprland"
 user = "greetd"

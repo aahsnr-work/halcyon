@@ -1,5 +1,4 @@
-# Halcyon Wallpapers
+halcyon wallpapers — TODO(user)
 
-Place wallpaper images for the halcyon desktop in this directory.
-
-TODO(user): Add customized background images and symlink default wallpapers as desired.
+Drop branded wallpapers here. Nothing is invented for you; the GNOME-era
+default wallpaper symlinks were removed with the rest of the GNOME footprint.
