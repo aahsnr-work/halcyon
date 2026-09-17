@@ -104,6 +104,8 @@ modules:
         - nwg-look
         - qt6ct
         - xdg-desktop-portal-hyprland
+        - greeter
+        - tuigreet
 
   # - type: script
   #   scripts:
