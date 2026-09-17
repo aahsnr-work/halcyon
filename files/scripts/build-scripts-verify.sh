@@ -114,5 +114,61 @@ else
   exit 1
 fi
 
+# --- dump-to-markdown ---
+echo "--- Checking dump-to-markdown ---"
+if test -x /usr/bin/dump-to-markdown; then
+  echo "  PASS  /usr/bin/dump-to-markdown executable"
+else
+  echo "  FAIL  /usr/bin/dump-to-markdown missing or not executable"
+  echo "::endgroup::"
+  exit 1
+fi
+
+dtm_version="$(/usr/bin/dump-to-markdown --version)"
+if echo "${dtm_version}" | grep -q "1.2.0"; then
+  echo "  PASS  dump-to-markdown version reported (${dtm_version})"
+else
+  echo "  FAIL  unexpected dump-to-markdown --version output: ${dtm_version}"
+  echo "::endgroup::"
+  exit 1
+fi
+
+if test -d /usr/lib/dump-to-markdown; then
+  echo "  PASS  /usr/lib/dump-to-markdown virtualenv present"
+else
+  echo "  FAIL  /usr/lib/dump-to-markdown virtualenv missing"
+  echo "::endgroup::"
+  exit 1
+fi
+
+if test ! -d /usr/src/dump-to-markdown; then
+  echo "  PASS  staged source cleaned up (/usr/src/dump-to-markdown absent)"
+else
+  echo "  FAIL  staged source still present at /usr/src/dump-to-markdown (cleanup skipped?)"
+  echo "::endgroup::"
+  exit 1
+fi
+
+echo "--- Functional smoke: dump a tiny tree ---"
+DTM_TMP="$(mktemp -d)"
+trap 'echo "  INFO  cleaning up ${DTM_TMP}"; rm -rf "${DTM_TMP}"' EXIT
+mkdir -p "${DTM_TMP}/smoke/src"
+echo "x = 1" >"${DTM_TMP}/smoke/src/a.py"
+# shellcheck disable=SC2016  # heading pattern is a literal, backticks included
+if /usr/bin/dump-to-markdown --root "${DTM_TMP}/smoke" --output "${DTM_TMP}/smoke-dump.md"; then
+  if grep -q '^## `smoke/src/a.py`$' "${DTM_TMP}/smoke-dump.md" &&
+    grep -q '^```python$' "${DTM_TMP}/smoke-dump.md"; then
+    echo "  PASS  smoke dump produced expected heading + fence ($(wc -l <"${DTM_TMP}/smoke-dump.md") lines)"
+  else
+    echo "  FAIL  smoke dump missing expected heading/fence content"
+    echo "::endgroup::"
+    exit 1
+  fi
+else
+  echo "  FAIL  dump-to-markdown exited non-zero on smoke tree"
+  echo "::endgroup::"
+  exit 1
+fi
+
 echo "--- build-scripts-verify complete — all checks passed ---"
 echo "::endgroup::"

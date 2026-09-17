@@ -246,6 +246,15 @@ enforce `install-weak-deps: false` everywhere and post-install provenance guards
 - dependabot keeps the actions current (daily).
 - Local test build: `bluebuild build recipes/halcyon.yml` (podman).
 
+## Repo tooling
+
+- `files/dump-to-markdown/` — a packaged, stdlib-only CLI that dumps a whole
+  project tree into one Markdown document (heading + language-tagged fenced
+  code block per file). It is baked into the image as `/usr/bin/dump-to-markdown`
+  (staged via `build-scripts.yml` → installed by `install-dump-to-markdown.sh`
+  into a venv at `/usr/lib/dump-to-markdown`) and verified by
+  `build-scripts-verify.sh`. For dev use: `uv tool install ./files/dump-to-markdown`.
+
 ## Credits & licenses
 
 - [Universal Blue](https://universal-blue.org) & [Bazzite](https://bazzite.gg)

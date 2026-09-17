@@ -1,6 +1,11 @@
 name: build-iso
 on:
   workflow_dispatch:
+  workflow_run:
+    # NOTE: this references the workflow *name* of build.yml, not its filename
+    workflows: [bluebuild]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -8,6 +13,15 @@ concurrency:
 
 jobs:
   generate-iso:
+    # Run on manual dispatch, or automatically when the bluebuild workflow
+    # (build.yml) completes successfully on main. workflow_run fires for ALL
+    # conclusions, so guard against failure/cancelled and non-main branches.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read

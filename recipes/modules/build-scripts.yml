@@ -1,8 +1,8 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
-# build-scripts.yml — the four build-time installers (files/scripts/*.sh),
-# baked results. TeX Live (scheme-medium) adds multi-GB build traffic and
-# image weight — intended; EXTRA_TL_PACKAGES=(latexmk biber) kept as scripted.
+# build-scripts.yml — the five build-time installers (files/scripts/*.sh),
+# baked results. TeX Live (scheme-small) adds build traffic and image
+# weight — intended; EXTRA_TL_PACKAGES=(latexmk biber) kept as scripted.
 modules:
   - type: dnf
     install:
@@ -14,12 +14,18 @@ modules:
         - jq
         - python3
 
+  - type: files
+    files:
+      - source: dump-to-markdown
+        destination: /usr/src/dump-to-markdown # staged for install-dump-to-markdown.sh; removed after install
+
   - type: script@v1
     scripts: # official mechanism: executes files/scripts/*.sh ($CONFIG_DIRECTORY/scripts)
       - install-obsidian.sh
       - install-zotero.sh
       - install-pyprland.sh
       - install-texlive.sh
+      - install-dump-to-markdown.sh
 
   - type: script@v1
     scripts:
