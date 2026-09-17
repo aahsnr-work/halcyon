@@ -25,7 +25,9 @@ modules:
         - zen-browser
         - emacs-pgtk
         - neovim
-        - zed
+        - nodejs
+        - npm
+        - tree-sitter-cli
 
   - type: script
     scripts:

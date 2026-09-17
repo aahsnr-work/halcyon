@@ -43,10 +43,7 @@ modules:
         - lynis
         - man-db
         - mpv
-        - neovim
         - ninja-build
-        - nodejs
-        - npm
         - pipx
         - pkgconf-pkg-config
         - plymouth
@@ -61,7 +58,6 @@ modules:
         - sqlite
         - swappy
         - transmission-gtk
-        - tree-sitter-cli
         - udiskie
         - xdg-desktop-portal
         - xdg-user-dirs
