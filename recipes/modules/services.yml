@@ -6,6 +6,7 @@ modules:
     system:
       enabled:
         - greetd.service
+        - halcyon-brew-bundle.service
       masked:
         - sddm.service
         - gdm.service

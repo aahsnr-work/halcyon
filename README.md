@@ -163,12 +163,15 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   `nix` + `nix-daemon` RPMs, `/var/nix` bind-mounted on `/nix` (`var-nix.service`
   + `nix.mount`), tmpfiles for store dirs, profile hook. Home-Manager is NOT
   baked — run `ujust home-manager-setup` after first login.
-- **Homebrew:** the base's bare brew payload is untouched; curated formulas install at
-  first login via the `brew-bundle.service` user service reading
-  `/usr/share/ublue-os/homebrew/Brewfile`
-  (atuin bat btop bun cava chafa direnv dust eza fd fzf gnuplot lazygit opencode
-  pandoc pixi ripgrep starship tealdeer uv yazi zellij). `ujust bazzite-cli` is gone;
-  these are the CLI tools of the image.
+- **Homebrew:** the base's bare brew payload is untouched; curated formulas
+  (`files/brew/Brewfile`: atuin bat btop bun cava chafa direnv dust eza fd
+  fzf gnuplot lazygit opencode pandoc pixi ripgrep starship tealdeer uv yazi
+  zellij) are baked at build time into `/usr/share/halcyon/brew-bundle.tar.zst`
+  and seeded at boot — pre-login and offline — by `halcyon-brew-bundle.service`,
+  so they are available immediately after login on fresh installs *and*
+  rebases (`/var` is not reseeded on rebase, hence the `/usr` payload). The
+  `brew-bundle.service` user unit remains as an online catch-up fallback.
+  `ujust bazzite-cli` is gone; these are the CLI tools of the image.
 - **Dotfiles:** BlueBuild `chezmoi` module →
   `https://github.com/aahsnr-configs/dots`, `file-conflict-policy: replace`,
   applied at first login for every user (and updated daily).

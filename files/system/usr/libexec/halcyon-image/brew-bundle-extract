@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# halcyon brew-bundle-extract — boot-time (pre-login, offline) formula seeder.
+# Runs from halcyon-brew-bundle.service as root. Never invokes the brew
+# binary (it refuses to run as root); formula presence is checked directly
+# via Cellar directories. Missing formulas are restored from the image
+# payload with no-clobber semantics — a newer formula the user installed or
+# brewed themselves is never downgraded, the same contract as the base
+# brew-setup.service's `cp -R -n`.
+set -euo pipefail
+
+BREWFILE="/usr/share/ublue-os/homebrew/Brewfile"
+PAYLOAD="/usr/share/halcyon/brew-bundle.tar.zst"
+PREFIX="/home/linuxbrew/.linuxbrew"
+
+echo "=== Halcyon: brew-bundle boot-time seeding ==="
+
+# Non-fatal by design: the login-time fallback (brew-bundle.service user
+# unit) still converges online if this payload is unavailable.
+if [ ! -f "${PAYLOAD}" ] || [ ! -f "${BREWFILE}" ]; then
+  echo "WARN: ${PAYLOAD} or ${BREWFILE} missing — skipping boot seeding (login fallback will handle it)."
+  exit 0
+fi
+
+# --- Determine which Brewfile formulas are missing from the Cellar ---
+missing=()
+while IFS= read -r name; do
+  [ -z "${name}" ] && continue
+  if [ ! -d "${PREFIX}/Cellar/${name}" ]; then
+    missing+=("${name}")
+  fi
+done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")
+
+if [ "${#missing[@]}" -eq 0 ]; then
+  echo "OK: All Brewfile formulas already present — nothing to seed."
+  exit 0
+fi
+
+echo "INFO: Seeding ${#missing[@]} missing formula(s): ${missing[*]}"
+
+# --- Extract the payload; /var/tmp is disk-backed (tmpfs-safe for the
+#     larger payload, unlike /tmp) ---
+TMP="$(mktemp -d /var/tmp/hbrew-seed.XXXXXX)"
+trap 'rm -rf "${TMP}"' EXIT
+
+tar --zstd -xf "${PAYLOAD}" -C "${TMP}"
+
+# --- No-clobber merge into the live prefix. This also self-heals a
+#     missing/failed brew core, since the payload carries the whole
+#     prefix (brew included). ---
+mkdir -p /home/linuxbrew
+cp -R -n "${TMP}/home/linuxbrew/.linuxbrew" /home/linuxbrew
+chown -R 1000:1000 /home/linuxbrew
+touch "${PREFIX}/.halcyon-bundle-seeded" 2>/dev/null || true
+
+# --- Report what actually landed ---
+still_missing=()
+for name in "${missing[@]}"; do
+  if [ ! -d "${PREFIX}/Cellar/${name}" ]; then
+    still_missing+=("${name}")
+  fi
+done
+
+if [ "${#still_missing[@]}" -gt 0 ]; then
+  echo "WARN: Formulas still absent after seeding: ${still_missing[*]} — login fallback will retry online."
+  exit 0
+fi
+
+echo "OK: All ${#missing[@]} previously-missing formula(s) seeded (offline, pre-login)."

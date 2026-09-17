@@ -1,25 +1,44 @@
 #!/usr/bin/env bash
-# halcyon brew bundle installer (runs once at first login via brew-bundle.service)
+# halcyon brew bundle installer — online catch-up fallback at first login.
 #
 # Design:
-#  - brew-setup.service (system, root, basic.target) extracts the tarball to
-#    /home/linuxbrew/.linuxbrew BEFORE any user session starts.
-#  - This script therefore expects brew to already be present; if it is not,
-#    it waits briefly in case of an unusually slow first boot.
-#  - brew bundle is retried up to 3 times with linear back-off for transient
-#    network failures at session start-up.
+#  - halcyon-brew-bundle.service (system, multi-user.target) seeds all
+#    Brewfile formulas from the image payload at boot, pre-login and
+#    offline — the normal path. This script therefore usually finds
+#    everything present and exits in seconds WITHOUT invoking brew.
+#  - Only when formulas are genuinely missing (payload seeding failed or
+#    was skipped) does it run `brew bundle` online, retried up to 3 times
+#    with linear back-off for transient network failures at session start.
 set -euo pipefail
 
 readonly BREW="/home/linuxbrew/.linuxbrew/bin/brew"
 readonly BREWFILE="/usr/share/ublue-os/homebrew/Brewfile"
 
-echo "=== Halcyon: brew-bundle one-shot installation ==="
+echo "=== Halcyon: brew-bundle login-time catch-up ==="
 
 # --- Sanity: Brewfile must be present (shipped in the image) ---
 if [[ ! -f "${BREWFILE}" ]]; then
   echo "ERROR: ${BREWFILE} not found in the image — cannot install packages." >&2
   exit 1
 fi
+
+# --- Fast path: boot-time seeding usually has everything in place.
+#     Check Cellar directories directly — no brew invocation, no network,
+#     finishes in under a second. ---
+missing=()
+while IFS= read -r name; do
+  [[ -z "${name}" ]] && continue
+  if [[ ! -d "/home/linuxbrew/.linuxbrew/Cellar/${name}" ]]; then
+    missing+=("${name}")
+  fi
+done < <(sed -n 's/^[[:space:]]*brew "\([^"]*\)".*/\1/p' "${BREWFILE}")
+
+if [[ ${#missing[@]} -eq 0 ]]; then
+  echo "OK: All Brewfile formulas already present (boot-time seeding) — nothing to do."
+  exit 0
+fi
+
+echo "INFO: ${#missing[@]} formula(s) missing despite boot seeding: ${missing[*]}"
 
 # --- Wait for brew binary (brew-setup.service runs before user sessions, but
 #     on an extremely slow first boot it may still be extracting the tarball) ---

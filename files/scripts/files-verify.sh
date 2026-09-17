@@ -85,7 +85,8 @@ for recipe in doom-setup home-manager-setup; do
   fi
 done
 
-# --- Brew assets (copied by files step + nix.yml systemd module) ---
+# --- Brew assets (Brewfile staged by brew.yml; units by the systemd
+#     module's file copy; payload itself is verified in brew-verify.sh) ---
 echo "--- Checking brew assets ---"
 if [[ ! -f "${BREWFILE}" ]]; then
   echo "  FAIL  ${BREWFILE} missing"
