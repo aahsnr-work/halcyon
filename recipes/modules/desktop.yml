@@ -32,6 +32,6 @@ modules:
         - thunar-vcs-plugin
         - thunar-volman
 
-  # - type: script
-  #   scripts:
-  #     - desktop-verify.sh # COPR file purge + provenance/ABI/repo gates
+  - type: script
+    scripts:
+      - desktop-verify.sh # COPR file purge + provenance/ABI/repo gates
