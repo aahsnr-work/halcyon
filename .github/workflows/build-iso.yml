@@ -13,7 +13,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install BlueBuild CLI (>= v0.9.23 required for /opt handling; latest v0.9.37)
         run: |
