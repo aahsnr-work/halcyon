@@ -4,21 +4,16 @@
 # Step B lists only proven-present packages (dnf module remove hard-fails on
 # anything missing); compose-variant candidates go through the rpm-q-filtered
 # Step C script with hard post-verification.
-#
-# IMPLEMENTATION NOTE: the script@v1 runner splits multi-line YAML `snippets:`
-# on newlines (get_json_array → readarray), so every multi-step script lives in
-# files/scripts/*.sh and is executed via the official `scripts:` key (same
-# mechanism as the four app installers). See NOTES.md deviation K.
 modules:
   # ── Step A — detection / inventory ─────────────────────────────────────────
-  - type: script@v1
+  - type: script
     scripts:
       - inventory.sh
 
   # ── Step B — confirmed removals (dnf module; every entry proven present) ──
   - type: dnf
     remove:
-      auto-remove: true          # sweep orphaned deps
+      auto-remove: true # sweep orphaned deps
       packages:
         # Bazzite GNOME additions (§1.9a)
         - nautilus-gsconnect
@@ -59,27 +54,27 @@ modules:
         - nautilus
         - ptyxis
         - gnome-control-center
-        - gnome-settings-daemon   # §11 note: re-add if GTK apps misbehave under Hyprland
+        - gnome-settings-daemon # §11 note: re-add if GTK apps misbehave under Hyprland
         - gjs
         - xdg-desktop-portal-gnome
 
   # ── Step C — guarded removals + hard verification ──────────────────────────
-  - type: script@v1
+  - type: script
     scripts:
       - guarded-removals.sh
 
   # ── Step D — file footprint + service/justfile pruning ─────────────────────
-  - type: script@v1
+  - type: script
     scripts:
       - file-footprint.sh
 
   # ── Step E — directory-installed GNOME extensions ──────────────────────────
   # (replaces the gnome-extensions module — §11 #1)
-  - type: script@v1
+  - type: script
     scripts:
       - gnome-extensions.sh
 
   # ── Step F — fonts, safe removal ───────────────────────────────────────────
-  - type: script@v1
+  - type: script
     scripts:
       - fonts-cleanup.sh

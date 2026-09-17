@@ -2,93 +2,6 @@
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
 modules:
   - type: dnf
-    install:
-      install-weak-deps: false
-      skip-unavailable: false
-      packages:
-        - accountsservice
-        - bleachbit
-        - bluez-tools
-        - brightnessctl
-        - cargo
-        - cmake
-        - cronie
-        - curl
-        - ddcutil
-        - direnv
-        - distrobox
-        - emacs-pgtk
-        - fail2ban
-        - fastfetch
-        - file-roller
-        - fontconfig
-        - fonts-filesystem
-        - gcc-c++
-        - git
-        - gnome-keyring
-        - gnome-tweaks
-        - go
-        - grim
-        - gsettings-desktop-schemas
-        - gtk4-layer-shell
-        - gzip
-        - hunspell
-        - hunspell-en
-        - hunspell-en-GB
-        - hunspell-en-US
-        - ImageMagick
-        - imv
-        - inotify-tools
-        - jq
-        - kitty
-        - kitty-shell-integration
-        - kitty-terminfo
-        - liberation-fonts
-        - libinput-utils
-        - logrotate
-        - lynis
-        - man-db
-        - mpv
-        - neovim
-        - ninja-build
-        - nodejs
-        - npm
-        - papers
-        - papirus-icon-theme
-        - pipx
-        - pkgconf-pkg-config
-        - plymouth
-        - plymouth-theme-spinner
-        - podman
-        - podman-sequoia
-        - policycoreutils-python-utils
-        - pymol
-        - python3-xlib
-        - qt5ct
-        - slurp
-        - sqlite
-        - swappy
-        - thunar
-        - thunar-archive-plugin
-        - thunar-media-tags-plugin
-        - thunar-vcs-plugin
-        - thunar-volman
-        - transmission-gtk
-        - tree-sitter-cli
-        - udiskie
-        - xdg-desktop-portal
-        - xdg-user-dirs
-        - xdg-user-dirs-gtk
-        - xhost
-        - xorg-x11-server-Xorg
-        - xorg-x11-server-Xwayland
-        - xorg-x11-xauth
-        - zathura
-        - zathura-pdf-poppler
-        - zathura-plugins-all
-        - zsh
-
-  - type: dnf
     repos:
       cleanup: true
       copr:
@@ -106,6 +19,18 @@ modules:
         - xdg-desktop-portal-hyprland
         - greetd
         - tuigreet
+        - kitty
+        - kitty-shell-integration
+        - kitty-terminfo
+        - gnome-keyring
+        - gnome-tweaks
+        - papers
+        - papirus-icon-theme
+        - thunar
+        - thunar-archive-plugin
+        - thunar-media-tags-plugin
+        - thunar-vcs-plugin
+        - thunar-volman
 
   # - type: script
   #   scripts:
