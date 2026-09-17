@@ -18,10 +18,10 @@ modules:
 
   - type: dnf
     install:
-      install-weak-deps: false     # winter omits this; halcyon constraint #6 adds it (§11 #4)
+      install-weak-deps: false
       packages:
         - nix
-        - nix-daemon               # nix multi-user/systemd install
+        - nix-daemon
 
   - type: systemd
     system:

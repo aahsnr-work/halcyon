@@ -51,8 +51,6 @@ modules:
         - mpv
         - neovim
         - ninja-build
-        - nix
-        - nix-daemon
         - nodejs
         - npm
         - papers
@@ -107,6 +105,6 @@ modules:
         - qt6ct
         - xdg-desktop-portal-hyprland
 
-  - type: script@v1
+  - type: script
     scripts:
       - desktop-verify.sh # COPR file purge + provenance/ABI/repo gates
