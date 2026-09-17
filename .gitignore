@@ -22,3 +22,4 @@ build/
 *.iso
 *.iso-CHECKSUM
 .obsidian/
+.zcode/

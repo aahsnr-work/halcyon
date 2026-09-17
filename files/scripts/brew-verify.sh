@@ -68,6 +68,13 @@ if test -e /home/linuxbrew; then
 else
   echo "  PASS  no /home/linuxbrew in the layer (boot-time extraction provides it)"
 fi
+if test -e /var/home/linuxbrew; then
+  echo "  FAIL  /var/home/linuxbrew present in the layer — /var must stay clean"
+  echo "::endgroup::"
+  exit 1
+else
+  echo "  PASS  no /var/home/linuxbrew in the layer"
+fi
 echo "::endgroup::"
 
 echo "::group::brew-verify — boot-time seeding wiring"

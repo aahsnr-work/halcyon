@@ -45,13 +45,28 @@ echo "  OK    ${BASE_TARBALL} present ($(du -h "${BASE_TARBALL}" | cut -f1))"
 echo "::endgroup::"
 
 echo "::group::install-brew-bundle — stage base brew prefix"
+# The bundle MUST run with the prefix at its final runtime path
+# /home/linuxbrew/.linuxbrew: bottles are relocated at install time to
+# whatever prefix they are poured into, so installing into a scratch path
+# and moving the tree would bake broken paths into every formula
+# (docs.brew.sh/Manpage — bottle relocation). The build container's /home
+# is a symlink to var/home with NO /var/home behind it (dangling), so
+# /var/home is created here if missing — and removed again after repack:
+# the layer must not ship /var state (bootc seeds /var from the initial
+# image only; bootc.dev/bootc/filesystem.html).
+CREATED_VAR_HOME=0
+if [ ! -d /var/home ]; then
+  mkdir -p /var/home
+  CREATED_VAR_HOME=1
+  echo "  INFO  created /var/home (missing in the build container — /home symlink was dangling)"
+fi
 echo "--- Staging exactly as brew-setup.service does at first boot ---"
 rm -rf /home/linuxbrew /tmp/hbrew-stage
 mkdir -p /tmp/hbrew-stage /home/linuxbrew
 tar --zstd -xf "${BASE_TARBALL}" -C /tmp/hbrew-stage
 cp -R -n /tmp/hbrew-stage/home/linuxbrew/.linuxbrew /home/linuxbrew
 rm -rf /tmp/hbrew-stage
-echo "  OK    prefix staged at ${PREFIX}"
+echo "  OK    prefix staged at ${PREFIX} (final runtime path — correct bottle relocation)"
 
 chown -R "${BREW_UID}:${BREW_UID}" /home/linuxbrew
 mkdir -p "${BREW_HOME}"
@@ -111,7 +126,14 @@ STAGE="/var/tmp/hbrew-pack"
 rm -rf "${STAGE}"
 mkdir -p "${STAGE}/home/linuxbrew"
 mv "${PREFIX}" "${STAGE}/home/linuxbrew/.linuxbrew"
-rmdir /home/linuxbrew
+rm -rf /home/linuxbrew
+
+# Drop the /var/home we created for staging — no /var state may ship in
+# the layer. Only removed when WE created it this run.
+if [ "${CREATED_VAR_HOME}" -eq 1 ]; then
+  rm -rf /var/home
+  echo "  OK    removed build-time /var/home (created for staging)"
+fi
 
 mkdir -p /usr/share/halcyon
 tar --zstd -cf "${PAYLOAD}" -C "${STAGE}" home
