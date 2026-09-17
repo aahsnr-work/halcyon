@@ -7,9 +7,12 @@
 # pypr-client C helper still compiled during install-pyprland.sh.
 set -euo pipefail
 test -x /usr/bin/obsidian && test -f /usr/share/applications/obsidian.desktop
-ldd /usr/lib/obsidian/obsidian 2>/dev/null | grep -i 'not found' && { echo 'ERROR: obsidian electron deps missing'; exit 1; } || true
+ldd /usr/lib/obsidian/obsidian 2>/dev/null | grep -i 'not found' && {
+  echo 'ERROR: obsidian electron deps missing'
+  exit 1
+} || true
 test -x /usr/bin/zotero && grep -q DisableAppUpdate /usr/lib/zotero/distribution/policies.json
 test -x /usr/bin/pypr && test -f /usr/lib/systemd/user/pyprland.service
 test -d /usr/lib/texlive && test -f /etc/profile.d/texlive.sh
-rpm -q gcc perl python3 jq   # all deliberately KEPT (gcc: emacs native-comp dep — NOTES.md §4 S)
-rpm -q emacs-pgtk            # must have survived (gcc cascade guard)
+rpm -q gcc perl python3 jq # all deliberately KEPT (gcc: emacs native-comp dep — NOTES.md §4 S)
+rpm -q emacs-pgtk          # must have survived (gcc cascade guard)

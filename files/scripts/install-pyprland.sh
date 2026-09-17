@@ -51,7 +51,7 @@ mkdir -p /usr/lib/systemd/user
 if [ -f "systemd-unit/pyprland.service" ]; then
   install -Dm644 "systemd-unit/pyprland.service" /usr/lib/systemd/user/pyprland.service
 else
-  cat > /usr/lib/systemd/user/pyprland.service <<'UNIT'
+  cat >/usr/lib/systemd/user/pyprland.service <<'UNIT'
 [Unit]
 Description=Starts pyprland daemon
 After=graphical-session.target

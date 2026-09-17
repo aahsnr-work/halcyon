@@ -45,14 +45,14 @@ fi
 # must survive our removals.
 rc=0
 for p in gnome-shell gdm mutter waydroid fastfetch firefox inputplumber \
-         steamos-manager-powerstation steamdeck-gnome-presets jupiter-fan-control; do
+  steamos-manager-powerstation steamdeck-gnome-presets jupiter-fan-control; do
   if rpm -q "$p" >/dev/null 2>&1; then
     echo "ERROR: ${p} still installed after removals" >&2
     rc=1
   fi
 done
 for p in bazaar bazzite-portal steam terra-gamescope umu-launcher lutris \
-         scx-scheds scx-tools usbip xwiimote-ng input-remapper; do
+  scx-scheds scx-tools usbip xwiimote-ng input-remapper; do
   if ! rpm -q "$p" >/dev/null 2>&1; then
     echo "ERROR: keeper ${p} missing after removals" >&2
     rc=1
@@ -62,8 +62,8 @@ done
 # recorded as base-image variance in NOTES.md §5). Warn loudly so a future base
 # that re-adds them doesn't slip away unnoticed, but don't fail the build.
 for p in steamos-manager gamescope-session-ogui-steam gamemode; do
-  rpm -q "$p" >/dev/null 2>&1 \
-    || echo "WARNING: ${p} not present — known stable-channel base variance (NOTES.md §5)"
+  rpm -q "$p" >/dev/null 2>&1 ||
+    echo "WARNING: ${p} not present — known stable-channel base variance (NOTES.md §5)"
 done
 if [ -f /usr/bin/distroshelf-helper ]; then
   echo "distroshelf-helper file present (kept)"

@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 # halcyon Step A — detection / inventory (prompt §5.1)
-# NOTE: runs inside the build container via the script@v1 module's scripts: key
-# (the v1 runner splits multi-line YAML snippets on newlines, so all multi-step
-# logic lives in files/scripts/*.sh — see NOTES.md deviation K).
 set -uo pipefail
 INVENTORY=/tmp/halcyon-inventory.txt
 {
@@ -32,14 +29,14 @@ INVENTORY=/tmp/halcyon-inventory.txt
   echo
   echo '## keeper spot-checks'
   rpm -q bazaar bazzite-portal scx-scheds scx-tools steamos-manager \
-        terra-gamescope umu-launcher lutris steam gamemode \
-        gamescope-session-ogui-steam jq perl python3 || true
+    terra-gamescope umu-launcher lutris steam gamemode \
+    gamescope-session-ogui-steam jq perl python3 || true
   printf 'distroshelf-helper file: '
   test -f /usr/bin/distroshelf-helper && echo present || echo absent
   echo
   echo '## unit enablement state (build-container view; informational)'
   for u in sddm gdm nvidia-powerd nvidia-persistenced scx_loader \
-           inputplumber bazzite-autologin brew-setup bazzite-flatpak-manager; do
+    inputplumber bazzite-autologin brew-setup bazzite-flatpak-manager; do
     printf '%s: ' "$u"
     systemctl is-enabled "$u" 2>&1 || true
   done
