@@ -7,7 +7,6 @@ modules:
       files:
         - vscode.repo
         - https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
-        - https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
       keys:
         - https://packages.microsoft.com/keys/microsoft.asc
         - https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
@@ -28,14 +27,18 @@ modules:
         - nodejs
         - npm
         - tree-sitter-cli
-        - repo: terra
-          exclude:
-            - zlib
-          install-weak-deps: false
-          packages:
-            - zed
 
-
+  - type: dnf
+    repos:
+      cleanup: true
+      files:
+        - https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo
+    install:
+      install-weak-deps: false
+      exclude:
+        - zlib
+      packages:
+        - zed
 
   - type: script
     scripts:
