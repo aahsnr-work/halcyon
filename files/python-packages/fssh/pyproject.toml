@@ -12,6 +12,6 @@ license = "Apache-2.0"
 [project.scripts]
 fssh = "fssh:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-py-modules = ["fssh"]
+[tool.setuptools.packages.find]
+where = ["src"]
+

@@ -12,6 +12,6 @@ license = "Apache-2.0"
 [project.scripts]
 rmtmp = "rmtmp:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-py-modules = ["rmtmp"]
+[tool.setuptools.packages.find]
+where = ["src"]
+

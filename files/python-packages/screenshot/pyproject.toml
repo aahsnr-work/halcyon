@@ -12,6 +12,6 @@ license = "Apache-2.0"
 [project.scripts]
 screenshot = "screenshot:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-py-modules = ["screenshot"]
+[tool.setuptools.packages.find]
+where = ["src"]
+

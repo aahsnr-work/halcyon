@@ -12,6 +12,6 @@ license = "Apache-2.0"
 [project.scripts]
 fconf = "fconf:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-py-modules = ["fconf"]
+[tool.setuptools.packages.find]
+where = ["src"]
+

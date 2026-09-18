@@ -154,10 +154,10 @@ else
 fi
 
 for bin_name in fconf fe ff fkill fp fssh rmi rmtmp screenshot se; do
-  if /usr/bin/${bin_name} --version >/dev/null 2>&1 || /usr/bin/${bin_name} -h >/dev/null 2>&1; then
-    echo "  PASS  ${bin_name} --version/-h smoke"
+  if /usr/bin/${bin_name} -h >/dev/null 2>&1 || /usr/bin/${bin_name} --version >/dev/null 2>&1; then
+    echo "  PASS  ${bin_name} -h/--version smoke"
   else
-    echo "  FAIL  ${bin_name} --version/-h exited non-zero"
+    echo "  FAIL  ${bin_name} -h/--version exited non-zero"
     echo "::endgroup::"
     exit 1
   fi

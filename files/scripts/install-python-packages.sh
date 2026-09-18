@@ -98,9 +98,9 @@ seed_tmp="$(mktemp -d)"
 tar --zstd -xf /usr/share/halcyon/brew-bundle.tar.zst -C "${seed_tmp}" home/linuxbrew/.linuxbrew/bin
 failed=()
 for pkg in fconf fe ff fkill fp fssh rmi rmtmp screenshot se; do
-  if "/usr/bin/${pkg}" --version >/dev/null 2>&1 || "/usr/bin/${pkg}" -h >/dev/null 2>&1; then
+  if "/usr/bin/${pkg}" -h >/dev/null 2>&1 || "/usr/bin/${pkg}" --version >/dev/null 2>&1; then
     echo "  OK    ${pkg} smoke"
-  elif PATH="${seed_tmp}/home/linuxbrew/.linuxbrew/bin:${PATH}" "/usr/bin/${pkg}" --version >/dev/null 2>&1 || PATH="${seed_tmp}/home/linuxbrew/.linuxbrew/bin:${PATH}" "/usr/bin/${pkg}" -h >/dev/null 2>&1; then
+  elif PATH="${seed_tmp}/home/linuxbrew/.linuxbrew/bin:${PATH}" "/usr/bin/${pkg}" -h >/dev/null 2>&1 || PATH="${seed_tmp}/home/linuxbrew/.linuxbrew/bin:${PATH}" "/usr/bin/${pkg}" --version >/dev/null 2>&1; then
     echo "  OK    ${pkg} smoke (payload tools on PATH)"
   else
     failed+=("${pkg}")
@@ -108,7 +108,7 @@ for pkg in fconf fe ff fkill fp fssh rmi rmtmp screenshot se; do
 done
 rm -rf "${seed_tmp}"
 if [ "${#failed[@]}" -gt 0 ]; then
-  echo "  FAIL  ${failed[*]} — --version/-h failed even with payload tools on PATH"
+  echo "  FAIL  ${failed[*]} — -h/--version failed even with payload tools on PATH"
   echo "::endgroup::"
   exit 1
 fi
