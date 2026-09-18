@@ -1,16 +1,17 @@
 # vim: set ft=make :
 
-# Round-trip edits to the dotfiles repo cloned at ~/Git/configs/dotfiles
-# (https://github.com/aahsnr-configs/dotfiles — remote uses the
-# github.com-aahsnr-configs SSH host alias)
+# Round-trip edits to the dotfiles repo cloned by the chezmoi module at
+# ~/.local/share/chezmoi (https://github.com/aahsnr-configs/dotfiles — remote
+# uses the github.com-halcyon-configs SSH host alias created by git-setup)
 
 # Flip the dotfiles origin to SSH (needed after a fresh HTTPS-only clone)
 [group("dotfiles")]
 dots-ssh:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "${HOME}/Git/configs/dotfiles"
-    git remote set-url origin git@github.com-aahsnr-configs:aahsnr-configs/dotfiles.git
+    DOTS_DIR="${DOTS_DIR:-$(chezmoi source-path)}"
+    cd "${DOTS_DIR}"
+    git remote set-url origin git@github.com-halcyon-configs:aahsnr-configs/dotfiles.git
     git remote -v
 
 # Stage, commit and push all dotfiles changes
@@ -18,7 +19,8 @@ dots-ssh:
 dots-push msg="updated":
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "${HOME}/Git/configs/dotfiles"
+    DOTS_DIR="${DOTS_DIR:-$(chezmoi source-path)}"
+    cd "${DOTS_DIR}"
     git add -A
     git commit -m "{{msg}}"
     git push origin main
@@ -29,7 +31,8 @@ dots-push msg="updated":
 dots-status:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "${HOME}/Git/configs/dotfiles"
+    DOTS_DIR="${DOTS_DIR:-$(chezmoi source-path)}"
+    cd "${DOTS_DIR}"
     git status -sb
     echo
     git log --oneline -5

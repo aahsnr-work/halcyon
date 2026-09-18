@@ -71,7 +71,9 @@ echo "::endgroup::"
 echo "::group::guarded-removals — hard-fail verification (must-be-gone)"
 echo "--- Packages that must NOT survive ---"
 rc=0
-for p in gnome-shell gdm mutter waydroid fastfetch firefox inputplumber \
+# NOTE: fastfetch is deliberately absent here — removals.yml removes the
+# Bazzite-bling'd one and core.yml reinstalls vanilla fastfetch afterwards.
+for p in gnome-shell gdm mutter waydroid firefox inputplumber \
   steamos-manager-powerstation steamdeck-gnome-presets jupiter-fan-control; do
   if rpm -q "$p" >/dev/null 2>&1; then
     ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")

@@ -20,6 +20,12 @@ echo "::endgroup::"
 
 echo "::group::install-texlive — download installer"
 echo "--- Fetching install-tl-unx.tar.gz from CTAN ---"
+# install-tl verifies downloads against TeX Live's GPG signatures by default
+# (install-tl manual) as long as gpg is present — keep it that way; never pass
+# --no-verify-downloads.
+if ! command -v gpg >/dev/null 2>&1; then
+  echo "  WARN  gpg not found in PATH — install-tl signature verification will be skipped"
+fi
 if ! curl -fsSL --progress-bar \
   https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz \
   -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then

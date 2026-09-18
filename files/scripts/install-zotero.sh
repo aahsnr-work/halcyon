@@ -7,6 +7,10 @@ ZOTERO_TMP="$(mktemp -d)"
 trap 'echo "  INFO  cleaning up ${ZOTERO_TMP}"; rm -rf "${ZOTERO_TMP}"' EXIT
 
 echo "--- Downloading Zotero Linux x86_64 tarball ---"
+# Integrity note: Zotero deliberately publishes no checksum files (upstream
+# position: TLS-protected downloads + the archive's internal gzip checksum
+# suffice — forums.zotero.org discussion 70280). Accepted risk: the download
+# below is TLS-authenticated to www.zotero.org and nothing else.
 DOWNLOAD_URL='https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64'
 echo "  INFO  URL: ${DOWNLOAD_URL}"
 

@@ -12,7 +12,7 @@ doom-setup:
     fi
 
     echo "Cloning Doom Emacs configuration..."
-    git clone git@github.com:aahsnr-configs/doom.git "$HOME/.config/doom"
+    git clone git@github.com-halcyon-configs:aahsnr-configs/doom.git "$HOME/.config/doom"
     echo "(doom! :config literate)" > "$HOME/.config/doom/init.el"
     git clone --depth 1 https://github.com/doomemacs/core "$HOME/.config/emacs"
 

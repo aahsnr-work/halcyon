@@ -12,13 +12,15 @@ modules:
       packages:
         - cliphist
         - hyprland-git
+        - hyprland-guiutils
         - hyprpwcenter
         - noctalia-git
+        - noctalia-greeter-git
         - nwg-look
         - qt6ct
+        - xdg-desktop-portal-gtk
         - xdg-desktop-portal-hyprland
         - greetd
-        - tuigreet
         - kitty
         - kitty-shell-integration
         - kitty-terminfo

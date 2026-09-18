@@ -1,8 +1,10 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
-# branding.yml — os-release identity + plymouth/motd/backgrounds placeholders.
-# Plymouth theme files, motd text and wallpapers are TODO(user) assets (§7.7);
-# no invented logos/wallpapers — fallback to spinner until real assets land.
+# branding.yml — os-release identity + plymouth/motd/backgrounds.
+# build-plymouth-assets.sh generates the theme's real assets from the baked
+# astronaut wallpaper (background, throbber frames, entry widgets) and selects
+# the theme; branding-verify.sh gates it. The initramfs module (recipe, after
+# this file) regenerates the initrd so the theme is active at boot.
 modules:
   - type: os-release
     properties:
@@ -13,4 +15,5 @@ modules:
 
   - type: script
     scripts:
+      - build-plymouth-assets.sh
       - branding-verify.sh

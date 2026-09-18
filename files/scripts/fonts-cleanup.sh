@@ -4,7 +4,7 @@ set -uo pipefail
 
 echo "::group::fonts-cleanup — safe font package removal"
 
-PROTECT='^(fontconfig|fontpackages|dejavu-sans-fonts|dejavu-sans-mono-fonts)(-|$)'
+PROTECT='^(fontconfig|fonts-filesystem|fontpackages|dejavu-sans-fonts|dejavu-sans-mono-fonts)(-|$)'
 removed=()
 kept=()
 skipped_required=()
@@ -34,7 +34,7 @@ while read -r pkg; do
     kept+=("${pkg} (required)")
     echo "  KEEP  ${pkg} (required by: $(echo "${reqs}" | grep -v 'no package' | head -n3 | tr '\n' ' '))"
   fi
-done < <(rpm -qa '*fonts*' | sort)
+done < <(rpm -qa --qf '%{NAME}\n' '*fonts*' | sort -u)
 
 echo ""
 echo "--- fonts-cleanup summary ---"

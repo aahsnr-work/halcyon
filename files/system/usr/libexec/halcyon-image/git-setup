@@ -88,20 +88,48 @@ else
     readonly RED="" GREEN="" YELLOW="" BLUE="" CYAN="" BOLD="" NC=""
 fi
 
-# Account configurations — modify these for your accounts
-declare -A ACCOUNTS=(
-    ["configs"]="ahsanur041@proton.me"
-    ["personal"]="ahsanur041@gmail.com"
-    ["work"]="aahsnr041@proton.me"
-    ["common"]="ahsan.05rahman@gmail.com"
-)
+# Account configurations are machine-local and NEVER ship in the public image:
+# they are read from ~/.config/halcyon/git-accounts.conf. On first run a
+# template is written there and the script exits so it can be filled in.
+# Format, one line per profile (profiles: configs, personal, work, common):
+#   profile=email,git-name
+ACCOUNTS_CONF="${XDG_CONFIG_HOME:-${HOME}/.config}/halcyon/git-accounts.conf"
+PROFILES=(configs personal work common)
 
-declare -A GIT_NAMES=(
-    ["configs"]="aahsnr-configs"
-    ["personal"]="aahsnr-personal"
-    ["work"]="aahsnr-work"
-    ["common"]="aahsnr-common"
-)
+declare -A ACCOUNTS=()
+declare -A GIT_NAMES=()
+
+if [[ -r "${ACCOUNTS_CONF}" ]]; then
+    while IFS= read -r line; do
+        line="${line%%#*}"
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        [[ "${line}" != *=* ]] && continue
+        profile="${line%%=*}"
+        profile="${profile//[[:space:]]/}"
+        rest="${line#*=}"
+        ACCOUNTS["${profile}"]="${rest%%,*}"
+        GIT_NAMES["${profile}"]="${rest#*,}"
+    done < "${ACCOUNTS_CONF}"
+    for profile in "${PROFILES[@]}"; do
+        if [[ -z "${ACCOUNTS[${profile}]:-}" ]]; then
+            echo "✗ Error: profile '${profile}' missing or empty in ${ACCOUNTS_CONF}" >&2
+            exit 1
+        fi
+    done
+else
+    mkdir -p "$(dirname "${ACCOUNTS_CONF}")"
+    cat > "${ACCOUNTS_CONF}" <<'EOF'
+# halcyon git-setup account map — machine-local, do not publish this file.
+# One line per profile:  profile=email,git-name
+configs=you@example.com,your-git-name
+personal=you@example.com,your-git-name
+work=you@example.com,your-git-name
+common=you@example.com,your-git-name
+EOF
+    echo "✗ Error: no ${ACCOUNTS_CONF}" >&2
+    echo "  Wrote a template there — fill in your real addresses and git names, then re-run git-setup." >&2
+    exit 1
+fi
 
 declare -A GIT_DIRS=(
     ["personal"]="${GIT_BASE_DIR}/personal"
@@ -246,7 +274,7 @@ cleanup_all_configs() {
 
     print_warning "${BOLD}This will DELETE the following configurations:${NC}"
     echo ""
-    echo "  1. SSH keys matching 'id_ed25519_aahsnr_*' (managed by this script)"
+    echo "  1. SSH keys matching 'id_ed25519_halcyon_*' (managed by this script)"
     echo "  2. ~/.ssh/config (will be regenerated)"
     echo "  3. Global Git config:            ${GIT_CONFIG}"
     echo "  4. XDG Git config:               ${GIT_XDG_CONFIG}"
@@ -274,7 +302,7 @@ cleanup_all_configs() {
     if [[ -d "${SSH_DIR}" ]]; then
         print_info "Backing up and removing managed SSH keys..."
         local key_deleted=0
-        for key in "${SSH_DIR}"/id_ed25519_aahsnr_*; do
+        for key in "${SSH_DIR}"/id_ed25519_halcyon_*; do
             if [[ -f "${key}" ]]; then
                 backup_item "${key}" && rm -f "${key}" && ((key_deleted++)) || true
                 local pub="${key}.pub"
@@ -425,7 +453,7 @@ generate_ssh_keys() {
 
     for account in "${!ACCOUNTS[@]}"; do
         local email="${ACCOUNTS[${account}]}"
-        local key_file="${SSH_DIR}/id_ed25519_aahsnr_${account}"
+        local key_file="${SSH_DIR}/id_ed25519_halcyon_${account}"
 
         if [[ -f "${key_file}" ]]; then
             print_info "Key for ${account} already exists: ${key_file}"
@@ -494,10 +522,10 @@ MACOS_CONFIG
 
     for account in configs personal work common; do
         if [[ -v ACCOUNTS[${account}] ]]; then
-            local key_file="${SSH_DIR}/id_ed25519_aahsnr_${account}"
+            local key_file="${SSH_DIR}/id_ed25519_halcyon_${account}"
             cat >>"${temp_config}" <<EOF
 # GitHub Account: ${account} (${ACCOUNTS[${account}]})
-Host github.com-aahsnr-${account}
+Host github.com-halcyon-${account}
     HostName github.com
     User git
     IdentityFile ${key_file}
@@ -512,7 +540,7 @@ EOF
 Host github.com
     HostName github.com
     User git
-    IdentityFile ${SSH_DIR}/id_ed25519_aahsnr_configs
+    IdentityFile ${SSH_DIR}/id_ed25519_halcyon_configs
     PreferredAuthentications publickey
 EOF
 
@@ -677,7 +705,7 @@ setup_ssh_agent() {
         print_info "Please start an agent manually. Examples:"
         print_info "  eval \$(ssh-agent)   # add to ~/.bashrc / ~/.profile"
         print_info "  systemctl --user enable --now ssh-agent  # on systemd systems"
-        print_info "Keys will not be loaded now. Add them later with: ssh-add ~/.ssh/id_ed25519_aahsnr_<account>"
+        print_info "Keys will not be loaded now. Add them later with: ssh-add ~/.ssh/id_ed25519_halcyon_<account>"
         return 0
     fi
 
@@ -685,7 +713,7 @@ setup_ssh_agent() {
     local already=0
 
     for account in "${!ACCOUNTS[@]}"; do
-        local key_file="${SSH_DIR}/id_ed25519_aahsnr_${account}"
+        local key_file="${SSH_DIR}/id_ed25519_halcyon_${account}"
 
         if [[ ! -f "${key_file}" ]]; then
             print_warning "Key file not found for ${account}: ${key_file}"
@@ -930,7 +958,7 @@ verify_setup() {
     # Check SSH keys
     print_info "Checking SSH keys..."
     for account in "${!ACCOUNTS[@]}"; do
-        local key_file="${SSH_DIR}/id_ed25519_aahsnr_${account}"
+        local key_file="${SSH_DIR}/id_ed25519_halcyon_${account}"
         local pub_file="${key_file}.pub"
 
         if [[ -f "${key_file}" ]] && [[ -f "${pub_file}" ]]; then
@@ -957,7 +985,7 @@ verify_setup() {
     # Check SSH config
     print_info "Checking SSH config..."
     if [[ -f "${SSH_DIR}/config" ]]; then
-        if ssh -G github.com-aahsnr-configs &>/dev/null; then
+        if ssh -G github.com-halcyon-configs &>/dev/null; then
             print_success "SSH config exists and is valid"
         else
             print_error "SSH config has syntax errors"
@@ -1056,7 +1084,7 @@ display_public_keys() {
 
     for account in configs personal work common; do
         if [[ -v ACCOUNTS[${account}] ]]; then
-            local pub_file="${SSH_DIR}/id_ed25519_aahsnr_${account}.pub"
+            local pub_file="${SSH_DIR}/id_ed25519_halcyon_${account}.pub"
 
             if [[ -f "${pub_file}" ]]; then
                 echo -e "${BOLD}${CYAN}╭─ Account: ${GIT_NAMES[${account}]} (${ACCOUNTS[${account}]})${NC}"
@@ -1119,7 +1147,7 @@ display_instructions() {
     printf "${BOLD}3. Test SSH Connections${NC}\n\n"
     for account in configs personal work common; do
         if [[ -v ACCOUNTS[${account}] ]]; then
-            printf "   ${CYAN}ssh -T git@github.com-aahsnr-${account}${NC}  # Test ${account}\n"
+            printf "   ${CYAN}ssh -T git@github.com-halcyon-${account}${NC}  # Test ${account}\n"
         fi
     done
     printf "\n   Expected: \"Hi username! You've successfully authenticated...\"\n\n"
@@ -1127,20 +1155,20 @@ display_instructions() {
     printf "${BOLD}4. Clone Repositories${NC}\n\n"
     printf "   Use the SSH host alias matching the target account:\n\n"
     printf "   ${GREEN}configs${NC} (in ~/Git/ root-level):\n"
-    printf "   ${CYAN}cd ~/Git && git clone git@github.com-aahsnr-configs:aahsnr/repo.git${NC}\n\n"
+    printf "   ${CYAN}cd ~/Git && git clone git@github.com-halcyon-configs:YOUR-USER/REPO.git${NC}\n\n"
     printf "   ${GREEN}personal${NC} (in ~/Git/personal/):\n"
-    printf "   ${CYAN}cd ~/Git/personal && git clone git@github.com-aahsnr-personal:aahsnr/repo.git${NC}\n\n"
+    printf "   ${CYAN}cd ~/Git/personal && git clone git@github.com-halcyon-personal:YOUR-USER/REPO.git${NC}\n\n"
     printf "   ${GREEN}work${NC} (in ~/Git/work/):\n"
-    printf "   ${CYAN}cd ~/Git/work && git clone git@github.com-aahsnr-work:aahsnr/repo.git${NC}\n\n"
+    printf "   ${CYAN}cd ~/Git/work && git clone git@github.com-halcyon-work:YOUR-USER/REPO.git${NC}\n\n"
     printf "   ${GREEN}common${NC} (in ~/Git/common/):\n"
-    printf "   ${CYAN}cd ~/Git/common && git clone git@github.com-aahsnr-common:aahsnr/repo.git${NC}\n\n"
+    printf "   ${CYAN}cd ~/Git/common && git clone git@github.com-halcyon-common:YOUR-USER/REPO.git${NC}\n\n"
 
     printf "${BOLD}5. Directory Structure and Auto-Switching${NC}\n\n"
     printf "   ${HOME}/Git/\n"
-    printf "   ├── personal/  ${GREEN}→ personal account + GPG key (ahsanur041@gmail.com)${NC}\n"
-    printf "   ├── work/      ${GREEN}→ work account + GPG key (aahsnr041@proton.me)${NC}\n"
-    printf "   ├── common/    ${GREEN}→ common account + GPG key (ahsan.05rahman@gmail.com)${NC}\n"
-    printf "   └── other/     ${GREEN}→ configs account + GPG key (ahsanur041@proton.me)${NC}\n\n"
+    printf "   ├── personal/  ${GREEN}→ personal account + GPG key (${ACCOUNTS[personal]})${NC}\n"
+    printf "   ├── work/      ${GREEN}→ work account + GPG key (${ACCOUNTS[work]})${NC}\n"
+    printf "   ├── common/    ${GREEN}→ common account + GPG key (${ACCOUNTS[common]})${NC}\n"
+    printf "   └── other/     ${GREEN}→ configs account + GPG key (${ACCOUNTS[configs]})${NC}\n\n"
     printf "   Git automatically uses the correct identity and signing key based on\n"
     printf "   which directory your repository lives in — no manual switching needed.\n\n"
 
@@ -1166,7 +1194,7 @@ display_instructions() {
     printf "   • Always clone repos into the correct directory for auto identity switching\n"
     printf "   • Use ${CYAN}git config user.email${NC} inside a repo to confirm the active identity\n"
     printf "   • If a repo is in the wrong directory, fix the remote URL:\n"
-    printf "     ${CYAN}git remote set-url origin git@github.com-aahsnr-<account>:USER/REPO.git${NC}\n"
+    printf "     ${CYAN}git remote set-url origin git@github.com-halcyon-<account>:USER/REPO.git${NC}\n"
     printf "   • Ed25519 GPG and SSH keys are more secure and faster than RSA\n"
     printf "   • See the companion git-crypt guide to add transparent file encryption\n\n"
 

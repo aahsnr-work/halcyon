@@ -2,7 +2,7 @@
 
 A lean, Hyprland-first gaming fork of [Bazzite](https://bazzite.gg), built with
 [BlueBuild](https://blue-build.org). GNOME is fully removed; the desktop is
-**Hyprland (`hyprland-git`) + Noctalia (`noctalia-git`)** with **greetd + tuigreet**
+**Hyprland (`hyprland-git`) + Noctalia (`noctalia-git`)** with **greetd + noctalia-greeter**
 login. NVIDIA open drivers, the Bazzite gaming stack, and a curated dev toolchain
 are baked in — rebuilt daily, calm by definition.
 
@@ -59,7 +59,7 @@ and the Bazzite docs) for enrollment steps.
 
 ## What this image is
 
-Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base image is
+Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard. The base image is
 `ghcr.io/ublue-os/bazzite-gnome-nvidia-open:latest`, so everything below is
 *relative to Bazzite's GNOME NVIDIA-open image*.
 
@@ -81,7 +81,7 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   symlinks, dconf-update.service, GNOME mimeapps handlers, Ptyxis skel,
   gnome-ssh-askpass, GNOME motd tip, firefox GNOME config.
 - **Display manager** — SDDM config purged (`/etc/sddm.conf.d`), sddm/gdm services
-  masked; replaced by greetd + tuigreet (see Added).
+  masked; replaced by greetd + noctalia-greeter (see Added).
 - **Handheld / Deck stack** — inputplumber, steamos-manager-powerstation,
   jupiter-fan-control, jupiter-hw-support-btrfs, galileo-mura, steamdeck-dsp,
   powerbuttond, vpower, sdgyrodsu, hid-replay, steamdeck-backgrounds,
@@ -139,12 +139,16 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
 - **Desktop stack** (from COPR `lionheartp/Hyprland`, install is *unscoped* —
   plain package names with the COPR enabled for the whole transaction, provenance
   verified after, COPR repo file purged):
-  `hyprland-git`, `noctalia-git`, `hyprpolkitagent`, `hyprland-qt-support`,
-  `xdg-desktop-portal-hyprland`, `xdg-desktop-portal-gtk`, `qt6-qtwayland`.
-- **Login:** `greetd` + `tuigreet` (Fedora binary package `tuigreet`; greeter user
-  is `greetd`). Config in `/etc/greetd/config.toml`; session list from
-  `/usr/share/wayland-sessions`; cache dir `/var/cache/tuigreet` created via
-  tmpfiles (tuigreet's hardcoded cache location — it has no `--cache` flag).
+  `hyprland-git`, `hyprland-guiutils`, `hyprpwcenter`, `noctalia-git`,
+  `noctalia-greeter-git`, `xdg-desktop-portal-hyprland`, `xdg-desktop-portal-gtk`
+  (+ the GTK/app set: kitty, thunar, papers, gnome-tweaks, …).
+- **Login:** `greetd` + `noctalia-greeter-git` (both from COPR `lionheartp/Hyprland`;
+  the greeter runs as the `greetd` user — the Arch-convention `greeter` account does
+  not exist on Fedora). Config in `/etc/greetd/config.toml` launches the wrapper
+  `/usr/bin/noctalia-greeter-session` (absolute path, per docs.noctalia.dev/greeter);
+  session list from `/usr/share/wayland-sessions`; state dir `/var/lib/noctalia-greeter`
+  (mode 0750, `greetd:greetd`) created via tmpfiles — the COPR package drops
+  upstream's tmpfiles rule because it hardcodes the `greeter` user.
 - **Browsers/editors (dnf module, repos cleaned up after):** `code` (Microsoft
   repo), `brave-browser` + `brave-origin` (Brave repo), `zen-browser`
   (**COPR `sneexy/zen-browser`, by user directive** — installed in a COPR-only
@@ -180,7 +184,8 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
   `home-manager-setup.just`, plus the modular personal recipes — `rebase.just`
   (rebases to the published halcyon image), `texlive.just` (user-mode tlmgr
   into `~/texmf`), `cleanup.just` (Nix GC + Flatpak prune + journal trim), and
-  `dots.just` (round-trip edits to the dotfiles repo cloned at `~/dotfiles`).
+  `dots.just` (round-trip edits to the dotfiles working copy at the chezmoi
+  source path, `~/.local/share/chezmoi`).
   All are shipped via the `justfiles` module and surfaced through
   `/usr/share/ublue-os/just/60-custom.just`.
 - **Helpers:** `encrypt-repo`, `git-setup`, `hyprtheme`, `nuke-nvim` in
@@ -354,9 +359,10 @@ NOT on Fedora kernels — the nearest sched_ext equivalent is `scx_bpfland`.
   none is invented for you. Your chezmoi dots + Brewfile own this; add one via
   the TODO extension point in `apps.yml` if you want a GUI terminal in the image.
 - **Obsidian version:** Obsidian's GitHub `releases/latest` is periodically
-  mobile-only (no AppImage). `install-obsidian.sh` handles this by falling back
-  to a known-good pinned release (v1.8.7). Update the fallback URL when you
-  refresh the image, or edit the script to query the desktop release channel.
+  mobile-only (no AppImage). `install-obsidian.sh` scans the last 15 releases
+  for the newest one shipping an AppImage and verifies the download against
+  the asset's sha256 `digest` from the GitHub API (pinned fallback URL if the
+  API is unreachable — that fallback is TLS-verified only).
 - **TODO(user) extension points:** personal shell setup (chezmoi repo), branding
   assets (`files/system/usr/share/plymouth/themes/halcyon/`,
   `files/system/usr/share/backgrounds/halcyon/`, motd), extra apps
@@ -405,8 +411,8 @@ enforce `install-weak-deps: false` everywhere and post-install provenance guards
   bind-mount pattern (`var-nix.service`, `nix.mount`, tmpfiles, profile hook).
 - [lionheartp/Hyprland COPR](https://copr.fedorainfracloud.org/coprs/lionheartp/Hyprland/)
   — `hyprland-git`, `noctalia-git` & friends.
-- [noctalia-shell](https://github.com/noctalia-dev/noctalia-shell) — the desktop.
+- [noctalia](https://github.com/noctalia-dev/noctalia) & [noctalia-greeter](https://github.com/noctalia-dev/noctalia-greeter) — the desktop and the greeter.
 - [DistroShelf](https://github.com/ranfdev/DistroShelf) — Flatpak app.
 - [JasonN3/build-container-installer](https://github.com/JasonN3/build-container-installer)
   — underlies `bluebuild generate-iso`.
-- [tuigreet](https://github.com/apognu/tuigreet) / [greetd](https://git.sr.ht/~kennylevinsen/greetd).
+- [greetd](https://git.sr.ht/~kennylevinsen/greetd).

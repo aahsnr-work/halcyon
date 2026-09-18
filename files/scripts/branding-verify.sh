@@ -17,18 +17,39 @@ fi
 
 # --- Plymouth theme ---
 echo "--- Checking Plymouth theme ---"
-if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-  current_theme=$(plymouth-set-default-theme 2>/dev/null || echo "(unknown)")
-  echo "  INFO  current Plymouth theme: ${current_theme}"
-  if plymouth-set-default-theme theme 2>/dev/null; then
-    echo "  PASS  Plymouth 'theme' theme applied"
-  elif plymouth-set-default-theme spinner 2>/dev/null; then
-    echo "  NOTE  Plymouth 'theme' not found; fell back to 'spinner'"
-  else
-    echo "  NOTE  Plymouth theme set failed — non-fatal (boot splash only)"
-  fi
+# build-plymouth-assets.sh (earlier in this module) generated the assets and
+# selected the theme via /etc/plymouth/plymouthd.conf; the initramfs module
+# (after branding.yml) regenerates the initrd. Verify the results here.
+if [ -f /etc/plymouth/plymouthd.conf ] && grep -q '^Theme=halcyon' /etc/plymouth/plymouthd.conf; then
+  echo "  PASS  plymouthd.conf selects Theme=halcyon"
 else
-  echo "  SKIP  plymouth-set-default-theme not in PATH (headless build)"
+  echo "  FAIL  /etc/plymouth/plymouthd.conf does not select Theme=halcyon"
+  echo "::endgroup::"
+  exit 1
+fi
+missing_assets=()
+if [ -s /usr/share/plymouth/themes/halcyon/background.png ]; then
+  echo "  PASS  background.png present"
+else
+  missing_assets+=("background.png")
+fi
+throbbers=$(find /usr/share/plymouth/themes/halcyon -name 'throbber-*.png' 2>/dev/null | wc -l)
+if [ "${throbbers}" -ge 24 ]; then
+  echo "  PASS  throbber frames present (${throbbers})"
+else
+  missing_assets+=("throbber frames (${throbbers}/24+)")
+fi
+if [ -f /usr/share/plymouth/themes/halcyon/entry.png ]; then
+  echo "  PASS  entry.png present (password box will render)"
+else
+  echo "  WARN  entry.png missing — password box may render blank (spinner theme absent?)"
+fi
+if [ "${#missing_assets[@]}" -eq 0 ]; then
+  echo "  PASS  all required theme assets generated"
+else
+  echo "  FAIL  missing Plymouth assets: ${missing_assets[*]}"
+  echo "::endgroup::"
+  exit 1
 fi
 
 # --- MOTD ---

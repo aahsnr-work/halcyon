@@ -8,15 +8,31 @@ trap 'echo "  INFO  cleaning up ${OBSIDIAN_TMP}"; rm -rf "${OBSIDIAN_TMP}"' EXIT
 
 cd "${OBSIDIAN_TMP}"
 
-# Query GitHub API for the latest Obsidian AppImage URL, with fallback.
-echo "--- Querying GitHub API for latest Obsidian release ---"
-APPIMAGE_URL="$(curl --fail --retry 5 --retry-delay 2 -sSL \
-  https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest 2>/dev/null |
-  jq -r '.assets[] | select(.name | test("(?i)\\.appimage$")) | .browser_download_url' |
-  head -n1 || true)"
+# Query GitHub API for the newest release that ships a desktop AppImage.
+# NOTE: releases/latest is unusable here — it is periodically a mobile-only
+# (apk) release with no AppImage asset. Each asset's API entry carries a
+# sha256 `digest`, which we verify the download against. GH_TOKEN/GITHUB_TOKEN/
+# BB_PASSWORD (set by the CI action) are used opportunistically to raise the
+# api.github.com rate limit; unauthenticated requests still work.
+echo "--- Querying GitHub API for latest Obsidian desktop release ---"
+GH_AUTH="${GH_TOKEN:-${GITHUB_TOKEN:-${BB_PASSWORD:-}}}"
+AUTH_ARGS=()
+if [ -n "${GH_AUTH}" ]; then
+  AUTH_ARGS=(-H "Authorization: Bearer ${GH_AUTH}")
+  echo "  INFO  using authenticated GitHub API request"
+fi
+API_RESPONSE="$(curl --fail --retry 5 --retry-delay 2 -sSL \
+  "${AUTH_ARGS[@]}" \
+  'https://api.github.com/repos/obsidianmd/obsidian-releases/releases?per_page=15' 2>/dev/null || true)"
+ASSET_LINE="$(printf '%s' "${API_RESPONSE}" | jq -r '
+  ([.[]? | .assets[]? | select((.name | test("(?i)\\.appimage$")) and ((.name | test("(?i)-arm64")) | not))][0]
+    | [.browser_download_url, (.digest // "-")]) | @tsv' 2>/dev/null || true)"
+APPIMAGE_URL="$(printf '%s' "${ASSET_LINE}" | cut -f1 || true)"
+APPIMAGE_DIGEST="$(printf '%s' "${ASSET_LINE}" | cut -f2 || true)"
 
 if [ -z "${APPIMAGE_URL}" ] || [ "${APPIMAGE_URL}" = "null" ]; then
   APPIMAGE_URL="https://github.com/obsidianmd/obsidian-releases/releases/download/v1.8.7/Obsidian-1.8.7.AppImage"
+  APPIMAGE_DIGEST="-"
   echo "  WARN  GitHub API unavailable or returned no AppImage URL — using fallback: ${APPIMAGE_URL}"
 else
   echo "  OK    resolved AppImage URL: ${APPIMAGE_URL}"
@@ -28,6 +44,20 @@ echo "--- Downloading AppImage ---"
 curl -fsSL --progress-bar "${APPIMAGE_URL}" -o obsidian.AppImage
 size=$(du -h obsidian.AppImage | cut -f1)
 echo "  OK    downloaded obsidian.AppImage (${size})"
+
+# --- Integrity: verify against the release asset's sha256 digest ---
+if [ -n "${APPIMAGE_DIGEST}" ] && [ "${APPIMAGE_DIGEST}" != "-" ] && [ "${APPIMAGE_DIGEST}" != "null" ]; then
+  expected="${APPIMAGE_DIGEST#sha256:}"
+  actual="$(sha256sum obsidian.AppImage | cut -d' ' -f1)"
+  if [ "${expected}" = "${actual}" ]; then
+    echo "  OK    sha256 verified against GitHub API asset digest (${actual:0:12}…)"
+  else
+    echo "  FAIL  sha256 mismatch — expected ${expected:0:12}…, got ${actual:0:12}…" >&2
+    exit 1
+  fi
+else
+  echo "  WARN  no digest available for this asset — download is TLS-verified only"
+fi
 
 chmod +x obsidian.AppImage
 
@@ -68,7 +98,7 @@ for icon in "${INSTALL_DIR}"/usr/share/icons/hicolor/*/apps/obsidian.png "${INST
     break
   fi
 done
-"${icon_installed}" || echo "  WARN  no icon file found inside AppImage"
+if [ "${icon_installed}" = true ]; then :; else echo "  WARN  no icon file found inside AppImage"; fi
 
 echo "--- Updating desktop database and icon cache ---"
 update-desktop-database /usr/share/applications &>/dev/null || true

@@ -14,10 +14,15 @@ export BACKUP_DIR="${HOME}/backup"
 
 # Default Applications
 export TERMINAL="kitty"
-export BROWSER="brave"
+export BROWSER="brave-browser" # Brave RPM ships /usr/bin/brave-browser, not brave
 export EDITOR="nvim"
 export VISUAL="emacsclient -c -a emacs"
-export PAGER="bat --paging=always --style=plain"
+# bat comes from the brew payload; fall back to less if it has not seeded yet
+if command -v bat >/dev/null 2>&1; then
+  export PAGER="bat --paging=always --style=plain"
+else
+  export PAGER="less"
+fi
 
 # Prepend "$1" to $PATH when not already in.
 # This function API is accessible to scripts in /etc/profile.d
@@ -44,6 +49,9 @@ pathprepend "${HOME}/bin"
 # Nix & Home-Manager User Profiles
 pathprepend "/nix/var/nix/profiles/default/bin"
 pathprepend "${HOME}/.nix-profile/bin"
+
+# System dirs are guaranteed by 00-path-guard.sh (sorted first), which runs
+# before this file and keeps user-space dirs in front of the system dirs.
 
 # Export PATH
 export PATH

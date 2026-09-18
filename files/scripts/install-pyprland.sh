@@ -8,9 +8,20 @@ trap 'echo "  INFO  cleaning up ${PYPR_TMP}"; rm -rf "${PYPR_TMP}"' EXIT
 
 cd "${PYPR_TMP}"
 
-# Query GitHub API for latest release tag with fallback
+# Query GitHub API for latest release tag with fallback.
+# Integrity note: pyprland's GitHub releases ship no assets and no checksums —
+# the source tarball is the auto-generated archive, TLS-fetched from github.com
+# (accepted risk). GH_TOKEN/GITHUB_TOKEN/BB_PASSWORD (set by the CI action) are
+# used opportunistically to raise the api.github.com rate limit.
 echo "--- Querying GitHub API for latest Pyprland release ---"
+GH_AUTH="${GH_TOKEN:-${GITHUB_TOKEN:-${BB_PASSWORD:-}}}"
+AUTH_ARGS=()
+if [ -n "${GH_AUTH}" ]; then
+  AUTH_ARGS=(-H "Authorization: Bearer ${GH_AUTH}")
+  echo "  INFO  using authenticated GitHub API request"
+fi
 LATEST_TAG="$(curl --fail --retry 5 --retry-delay 2 -sSL \
+  "${AUTH_ARGS[@]}" \
   https://api.github.com/repos/hyprland-community/pyprland/releases/latest 2>/dev/null |
   jq -r '.tag_name // empty' || true)"
 
@@ -106,7 +117,19 @@ RestartSec=2
 [Install]
 WantedBy=graphical-session.target
 UNIT
-  echo "  OK    inline pyprland.service written"
+  echo "--- install-pyprland.service written"
+
+# halcyon: pyprland.service is enabled --global for ALL users/DEs. Gate it to
+# Hyprland sessions with a real unit condition instead of the upstream
+# ExecStartPre no-op ('[ ... ] || exit 0' is success either way). A drop-in
+# covers both the upstream-unit and inline-unit paths above.
+mkdir -p /usr/lib/systemd/user/pyprland.service.d
+cat >/usr/lib/systemd/user/pyprland.service.d/10-halcyon-condition.conf <<'UNIT'
+[Unit]
+# Pyprland is a Hyprland plugin daemon — skip it on every other session.
+ConditionEnvironment=XDG_CURRENT_DESKTOP=Hyprland
+UNIT
+echo "  OK    ConditionEnvironment drop-in installed"
 fi
 
 echo "--- install-pyprland complete: Pyprland ${LATEST_TAG} → ${INSTALL_DIR}, /usr/bin/pypr ---"

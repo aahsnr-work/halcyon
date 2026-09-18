@@ -57,8 +57,34 @@ if [[ -f "${BREW_ENV}" ]]; then
     echo "  FAIL  Homebrew bin PATH entry missing from ${BREW_ENV}"
     exit 1
   fi
+  # environment.d generators can run without PATH in their environment; a bare
+  # $PATH then expands to empty and poisons every session inheriting it.
+  if grep -qE '^PATH=\$\{PATH:-' "${BREW_ENV}"; then
+    echo "  PASS  ${BREW_ENV} guards against empty \$PATH expansion"
+  else
+    echo "  FAIL  ${BREW_ENV} uses a bare \$PATH — poisons session PATH when the generator env has none"
+    exit 1
+  fi
 else
   echo "  FAIL  ${BREW_ENV} missing — brew packages will be invisible to Wayland/GUI apps"
+  exit 1
+fi
+
+# --- PATH fail-safe + regression test for the empty-PATH login failure ---
+echo "--- Checking PATH guard and login-shell regression ---"
+if [[ -r /etc/profile.d/00-path-guard.sh ]]; then
+  echo "  PASS  /etc/profile.d/00-path-guard.sh present"
+else
+  echo "  FAIL  /etc/profile.d/00-path-guard.sh missing — profile.d has no PATH fail-safe"
+  exit 1
+fi
+
+# Regression test for the exact deployed failure: a login shell inheriting an
+# empty PATH must still resolve system binaries once /etc/profile has run.
+if env -i PATH= HOME=/root /bin/bash -lc 'command -v grep >/dev/null' 2>/dev/null; then
+  echo "  PASS  login shell with empty inherited PATH can find system binaries"
+else
+  echo "  FAIL  login shell with empty inherited PATH cannot find grep — PATH guard broken"
   exit 1
 fi
 

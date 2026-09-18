@@ -1,8 +1,8 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
 # brew.yml — curated formulas, BAKED into the image at build time.
-# The files module stages the Brewfile early (this module runs at order 7;
-# files.yml's tree copy is later at 9); install-brew-bundle.sh stages the
+# The files module stages the Brewfile early (this module runs at order 8;
+# files.yml's tree copy is later at 10); install-brew-bundle.sh stages the
 # base's brew payload, runs `brew bundle` as a throwaway uid, and repacks
 # the populated prefix to /usr/share/halcyon/brew-bundle.tar.zst.
 # halcyon-brew-bundle.service (system, multi-user.target) extracts it at

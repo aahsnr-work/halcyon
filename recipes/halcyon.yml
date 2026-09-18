@@ -29,4 +29,7 @@ modules:
   - from-file: modules/files.yml
   - from-file: modules/services.yml
   - from-file: modules/branding.yml
+  # Regenerate the initrd so the halcyon Plymouth theme is active at boot
+  # (theme changes require initramfs regeneration; must come after branding).
+  - type: initramfs
   - type: signing
