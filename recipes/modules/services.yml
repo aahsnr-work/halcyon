@@ -5,10 +5,11 @@ modules:
   - type: systemd
     system:
       enabled:
-        - greetd.service
+        # - greetd.service
         - halcyon-brew-bundle.service
       masked:
         - sddm.service
+        - greetd.service
         - gdm.service
         - bazzite-autologin.service
         - nvidia-persistenced.service
