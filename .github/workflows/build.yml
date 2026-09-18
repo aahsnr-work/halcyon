@@ -1,35 +1,25 @@
-name: bluebuild
+name: build
 on:
   schedule:
-    - cron:
-        "00 08 * * *" # build at 08:00 UTC every day
-        # (20 minutes after last ublue images start building)
+    - cron: "00 08 * * *"
   push:
-    paths-ignore: # don't rebuild if only documentation has changed
-      - "**.md"
-
+    branches: [container, main]
   pull_request:
-  workflow_dispatch: # allow manually triggering builds
+  workflow_dispatch:
 concurrency:
-  # only run one build at a time
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 jobs:
-  bluebuild:
+  build:
     name: Build Custom Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
-    strategy:
-      fail-fast: false # stop GH from cancelling all matrix builds if one fails
-      matrix:
-        recipe:
-          - halcyon.yml
     steps:
       # Copr's download CDN intermittently 504s on repodata; poll until it
-      # answers 200 (up to ~30 min) before spending 20+ min on the build.
+      # answers 200 (up to ~30 min) — still consumed during the transition.
       - name: Wait for Copr metadata availability
         run: |
           set -euo pipefail
@@ -37,22 +27,57 @@ jobs:
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || true)
             echo "attempt ${i}: HTTP ${code}"
-            if [ "$code" = "200" ]; then
-              exit 0
-            fi
+            [ "$code" = "200" ] && exit 0
             sleep 60
           done
-          echo "::error::Copr metadata still unavailable after 30 attempts — aborting to avoid a wasted build; re-run later."
+          echo "::error::Copr metadata still unavailable after 30 attempts — re-run later."
           exit 1
 
-      # the build is fully handled by the reusable github action
-      - name: Build Custom Image
-        uses: blue-build/github-action@v1.13
-        with:
-          recipe: ${{ matrix.recipe }}
-          cosign_private_key: ${{ secrets.SIGNING_SECRET }}
-          registry_token: ${{ github.token }}
-          pr_event_number: ${{ github.event.number }}
+      - uses: actions/checkout@v4
 
-          # enabled by default, disable if your image is small and you want faster builds
-          maximize_build_space: true
+      # free runner disk (equivalent of the action's maximize_build_space)
+      - name: Maximize build space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/lib/jvm /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force || true
+          df -h /
+
+      - name: Build image
+        id: build
+        run: |
+          set -euo pipefail
+          DATE_TAG=$(date +%Y%m%d)
+          SHA_TAG=$(git rev-parse --short HEAD)
+          IMAGE=ghcr.io/${{ github.repository_owner }}/halcyon
+          podman build --pull --platform linux/amd64 \
+            -t ${IMAGE}:latest -t ${IMAGE}:${DATE_TAG} \
+            -t ${IMAGE}:44 -t ${IMAGE}:${DATE_TAG}-44 -t ${IMAGE}:${SHA_TAG}-44 .
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "date_tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+
+      # sign + push only on branch pushes (not PRs) — same semantics as the
+      # BlueBuild action had
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        run: echo "${{ github.token }}" | \
+          podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Install cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign and push
+        if: github.event_name == 'push'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ""
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.build.outputs.image }}"
+          for tag in latest "${{ steps.build.outputs.date_tag }}" 44 \
+                     "${{ steps.build.outputs.date_tag }}-44" "${{ steps.build.outputs.sha_tag }}-44"; do
+            podman push "${IMAGE}:${tag}"
+            cosign sign --key env://COSIGN_PRIVATE_KEY --yes "${IMAGE}:${tag}"
+          done
