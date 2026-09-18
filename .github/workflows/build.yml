@@ -28,6 +28,23 @@ jobs:
         recipe:
           - halcyon.yml
     steps:
+      # Copr's download CDN intermittently 504s on repodata; poll until it
+      # answers 200 (up to ~30 min) before spending 20+ min on the build.
+      - name: Wait for Copr metadata availability
+        run: |
+          set -euo pipefail
+          URL="https://download.copr.fedorainfracloud.org/results/lionheartp/Hyprland/fedora-44-x86_64/repodata/repomd.xml"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || true)
+            echo "attempt ${i}: HTTP ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "::error::Copr metadata still unavailable after 30 attempts — aborting to avoid a wasted build; re-run later."
+          exit 1
+
       # the build is fully handled by the reusable github action
       - name: Build Custom Image
         uses: blue-build/github-action@v1.13

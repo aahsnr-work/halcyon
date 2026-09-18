@@ -16,6 +16,14 @@ labels:
   halcyon.desktop: hyprland-noctalia
 
 modules:
+  # dnf5 retry/timeout drop-in — must be staged before the FIRST dnf module
+  # (core.yml) runs, so flaky external repos (Copr CDN 504s) are retried
+  # instead of aborting the build.
+  - type: files
+    files:
+      - source: dnf-libdnf5
+        destination: /etc/dnf
+
   # ORDER IS SIGNIFICANT — removals first (constraint 5), services/branding last.
   - from-file: modules/removals.yml
   - from-file: modules/core.yml
