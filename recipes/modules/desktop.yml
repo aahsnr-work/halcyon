@@ -13,6 +13,8 @@ modules:
         - cliphist
         - hyprland-git
         - hyprpwcenter
+        - hyprshutdown
+        - hyprland-guiutils
         - noctalia-git
         - noctalia-greeter-git
         - nwg-look
@@ -32,7 +34,6 @@ modules:
         - thunar-media-tags-plugin
         - thunar-vcs-plugin
         - thunar-volman
-        - hyprshutdown
 
   - type: script
     scripts:
