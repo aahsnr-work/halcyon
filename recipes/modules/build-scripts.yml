@@ -13,11 +13,14 @@ modules:
         - perl
         - jq
         - python3
+    # NOTE: the python-packages fuzzy helpers need fd/fzf/bat/rg at runtime —
+    # these are deliberately NOT dnf-installed here: the Brewfile provides
+    # them via the baked brew payload (boot seeding + brew shellenv PATH).
 
   - type: files
     files:
-      - source: dump-to-markdown
-        destination: /usr/src/dump-to-markdown # staged for install-dump-to-markdown.sh; removed after install
+      - source: python-packages
+        destination: /usr/src/python-packages # staged for install-python-packages.sh; removed after install
 
   - type: script@v1
     scripts: # official mechanism: executes files/scripts/*.sh ($CONFIG_DIRECTORY/scripts)
@@ -25,7 +28,7 @@ modules:
       - install-zotero.sh
       - install-pyprland.sh
       - install-texlive.sh
-      - install-dump-to-markdown.sh
+      - install-python-packages.sh
 
   - type: script@v1
     scripts:

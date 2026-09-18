@@ -16,6 +16,22 @@ else
   echo "  SKIP  /usr/share/gnome-shell/extensions/ not present (already clean)"
 fi
 
+# --- Remove bazzite gschema/dconf overrides (upstream build-gnome-extensions residue) ---
+echo "--- Removing bazzite gschema/dconf overrides ---"
+removed=0
+for f in \
+  /usr/share/glib-2.0/schemas/zz0-03-bazzite-desktop-silverblue-extensions.gschema.override \
+  /usr/share/ublue-os/dconfs/desktop-silverblue/zz0-03-bazzite-desktop-silverblue-extensions.gschema.override \
+  /usr/share/ublue-os/dconfs/desktop-silverblue/10-bazzite-deck-silverblue-logomenu \
+  /etc/dconf/db/distro.d/10-bazzite-deck-silverblue-logomenu \
+  /usr/share/glib-2.0/schemas/*extensions*.gschema.override; do
+  [ -e "${f}" ] || continue
+  rm -f "${f}"
+  echo "  REMOVED  ${f}"
+  removed=$((removed + 1))
+done
+[ "${removed}" -eq 0 ] && echo "  SKIP  no bazzite gschema/dconf overrides found"
+
 # --- Recompile glib schemas after removing extension overrides ---
 echo "--- Recompiling GLib schemas ---"
 if glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null; then
@@ -37,14 +53,14 @@ done
 
 # --- Rebuild dconf database ---
 echo "--- Rebuilding dconf database ---"
-if [ -d /etc/dconf/db/local.d ]; then
+if [ -d /etc/dconf/db ]; then
   if dconf update 2>/dev/null; then
     echo "  OK    dconf database rebuilt"
   else
     echo "  NOTE  dconf update returned non-zero — non-fatal"
   fi
 else
-  echo "  SKIP  /etc/dconf/db/local.d/ absent — dconf update skipped"
+  echo "  SKIP  /etc/dconf/db/ absent — dconf update skipped"
 fi
 
 echo "--- gnome-extensions complete ---"

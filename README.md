@@ -177,14 +177,16 @@ Boot → greetd/tuigreet → Hyprland → Noctalia first-run wizard. The base im
 - **ujust recipes:** `ujust doom-setup` (clones your Doom config via SSH and
   installs Doom Emacs — needs your SSH keys) and `ujust home-manager-setup`
   (bootstraps standalone Home Manager) from `doom-setup.just` /
-  `home-manager-setup.just`, plus the personal recipes in `custom.just`:
-  `ujust rebase-to-custom` (rebases to the published halcyon image),
-  `ujust texlive-install <pkg>` / `ujust texlive-update` (user-mode tlmgr into
-  `~/texmf`), and `ujust halcyon-cleanup` (Nix GC + Flatpak prune + journal
-  trim). All are shipped via the `justfiles` module and surfaced through
+  `home-manager-setup.just`, plus the modular personal recipes — `rebase.just`
+  (rebases to the published halcyon image), `texlive.just` (user-mode tlmgr
+  into `~/texmf`), `cleanup.just` (Nix GC + Flatpak prune + journal trim), and
+  `dots.just` (round-trip edits to the dotfiles repo cloned at `~/dotfiles`).
+  All are shipped via the `justfiles` module and surfaced through
   `/usr/share/ublue-os/just/60-custom.just`.
-- **Helpers:** `fconf` and `fe` (fuzzy fd/fzf/bat file finders) in
-  `/usr/libexec/halcyon-image/`, on PATH via `/etc/profile.d/image-path.sh`.
+- **Helpers:** `encrypt-repo`, `git-setup`, `hyprtheme`, `nuke-nvim` in
+  `/usr/libexec/halcyon-image/`, on PATH via `/etc/profile.d/image-path.sh`
+  (the fuzzy finders and screenshot moved to Python binaries in `/usr/bin`
+  — see `files/python-packages/`).
 - **Fonts:** Nerd Fonts `JetBrainsMono` + `NerdFontsSymbolsOnly`; Google
   `JetBrains Mono`, `Noto Emoji`, `Noto Color Emoji`.
 
@@ -334,6 +336,11 @@ NOT on Fedora kernels — the nearest sched_ext equivalent is `scx_bpfland`.
 
 ## Known caveats
 
+- **OSTree `/usr/local` gotcha:** anything baked into the image must live
+  under `/usr` (halcyon bakes apps into `/usr/lib/*` for this reason).
+  `/usr/local` is a symlink to `/var/usrlocal` — it does not update across
+  rebases, so content placed there at build time silently vanishes or goes
+  stale on the next rebase.
 - **XDG autostart:** Hyprland does not run `/etc/xdg/autostart` natively. Let
   Noctalia handle XDG autostart or add `exec-once` lines in your Hyprland config.
   (The base's `/etc/xdg/autostart/steam.desktop` autostart entry is absent in
@@ -380,12 +387,14 @@ enforce `install-weak-deps: false` everywhere and post-install provenance guards
 
 ## Repo tooling
 
-- `files/dump-to-markdown/` — a packaged, stdlib-only CLI that dumps a whole
-  project tree into one Markdown document (heading + language-tagged fenced
-  code block per file). It is baked into the image as `/usr/bin/dump-to-markdown`
-  (staged via `build-scripts.yml` → installed by `install-dump-to-markdown.sh`
-  into a venv at `/usr/lib/dump-to-markdown`) and verified by
-  `build-scripts-verify.sh`. For dev use: `uv tool install ./files/dump-to-markdown`.
+- `files/python-packages/` — eleven stdlib-only Python packages installed into
+  one shared venv (`/usr/lib/halcyon-python`) at build time, each console
+  script symlinked separately into `/usr/bin`: `dump-to-markdown` plus ten
+  helpers that replace the former bash versions in
+  `/usr/libexec/halcyon-image` (`fconf`, `fe`, `ff`, `fkill`, `fp`, `fssh`,
+  `rmi`, `rmtmp`, `screenshot`, `se`). Installed by
+  `install-python-packages.sh`, verified by `build-scripts-verify.sh`.
+  Dev use: `uv tool install ./files/python-packages/<name>`.
 
 ## Credits & licenses
 

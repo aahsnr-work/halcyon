@@ -27,6 +27,11 @@ BREW_HOME="/var/tmp/brew-build-home"
 MAX_ATTEMPTS=3
 RETRY_DELAY=20
 
+# /var/tmp hosts transient staging dirs; the built image strips /var, so
+# guarantee it exists with the canonical sticky mode (1777, matching the
+# base and tmp.conf) before anything stages under it.
+install -d -m 1777 /var/tmp
+
 echo "::group::install-brew-bundle — payload inputs"
 if [ ! -f "${BREWFILE}" ]; then
   echo "  FAIL  ${BREWFILE} missing — brew.yml files module did not stage it"

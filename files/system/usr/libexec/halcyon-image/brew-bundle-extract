@@ -66,11 +66,21 @@ repair=( "${missing[@]}" "${incomplete[@]}" )
 #     larger payload, unlike /tmp). Created if missing: the image layer does
 #     not ship /var/tmp (tmp.conf's `q /var/tmp` recreates it on boot, but
 #     never assume the environment) ---
-mkdir -p /var/tmp
+install -d -m 1777 /var/tmp
 TMP="$(mktemp -d /var/tmp/hbrew-seed.XXXXXX)"
 trap 'rm -rf "${TMP}"' EXIT
 
 tar --zstd -xf "${PAYLOAD}" -C "${TMP}"
+
+# --- Security: refuse to merge through pre-planted symlinks ---
+# The merge target lives under /var/home (user-writable territory). A
+# symlink planted at the prefix would make the root cp descend into an
+# attacker-chosen directory. Healthy systems always have real directories
+# here (brew-setup.service / this script create them).
+if [ -L /home/linuxbrew ] || [ -L "${PREFIX}" ]; then
+  echo "WARN: /home/linuxbrew or ${PREFIX} is a symlink — refusing boot seeding (login fallback will converge online)."
+  exit 0
+fi
 
 # --- No-clobber merge into the live prefix. This also self-heals a
 #     missing/failed brew core, since the payload carries the whole

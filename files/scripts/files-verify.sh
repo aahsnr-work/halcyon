@@ -118,43 +118,57 @@ for recipe in doom-setup home-manager-setup; do
   fi
 done
 
-# --- custom.just personal recipes (imported into 60-custom.just) ---
-echo "--- Checking custom.just recipes ---"
-CUSTOM_JUST="/usr/share/bluebuild/justfiles/custom.just"
-if [[ -f "${CUSTOM_JUST}" ]]; then
-  echo "  PASS  ${CUSTOM_JUST} present"
-else
-  echo "  FAIL  ${CUSTOM_JUST} missing"
-  exit 1
-fi
-
-if grep -qF 'import "/usr/share/bluebuild/justfiles/custom.just"' "${JUST60}"; then
-  echo "  PASS  custom.just imported in 60-custom.just"
-else
-  echo "  FAIL  custom.just not imported in ${JUST60}"
-  exit 1
-fi
-
-for recipe in rebase-to-custom texlive-install texlive-update halcyon-cleanup; do
-  if grep -q "${recipe}" "${CUSTOM_JUST}"; then
-    echo "  PASS  ${recipe} recipe present in custom.just"
+# --- Modular personal justfiles (imported into 60-custom.just) ---
+echo "--- Checking personal justfiles ---"
+declare -A JUST_RECIPES=(
+  [rebase.just]="rebase-to-custom"
+  [texlive.just]="texlive-install texlive-update"
+  [cleanup.just]="halcyon-cleanup"
+  [dots.just]="dots-ssh dots-push dots-status"
+)
+for jf in rebase.just texlive.just cleanup.just dots.just; do
+  target="/usr/share/bluebuild/justfiles/${jf}"
+  if [[ -f "${target}" ]]; then
+    echo "  PASS  ${target} present"
   else
-    echo "  FAIL  ${recipe} recipe missing from ${CUSTOM_JUST}"
+    echo "  FAIL  ${target} missing"
     exit 1
   fi
+  if grep -qF "import \"/usr/share/bluebuild/justfiles/${jf}\"" "${JUST60}"; then
+    echo "  PASS  ${jf} imported in 60-custom.just"
+  else
+    echo "  FAIL  ${jf} not imported in ${JUST60}"
+    exit 1
+  fi
+  if /usr/bin/just --justfile "${target}" --list >/dev/null 2>&1; then
+    echo "  PASS  ${jf} parses (just --list)"
+  else
+    echo "  FAIL  ${jf} does not parse — just --list failed"
+    exit 1
+  fi
+  for recipe in ${JUST_RECIPES[$jf]}; do
+    if grep -q "${recipe}" "${target}"; then
+      echo "  PASS  ${recipe} recipe present in ${jf}"
+    else
+      echo "  FAIL  ${recipe} recipe missing from ${jf}"
+      exit 1
+    fi
+  done
 done
 
-if grep -q "ghcr.io/aahsnr-work/halcyon" "${CUSTOM_JUST}" && ! grep -q "bazzite-hyprland" "${CUSTOM_JUST}"; then
+if grep -q "ghcr.io/aahsnr-work/halcyon" /usr/share/bluebuild/justfiles/rebase.just && ! grep -q "bazzite-hyprland" /usr/share/bluebuild/justfiles/rebase.just; then
   echo "  PASS  rebase recipe targets the halcyon image"
 else
   echo "  FAIL  rebase recipe does not target ghcr.io/aahsnr-work/halcyon"
   exit 1
 fi
 
-if /usr/bin/just --justfile "${CUSTOM_JUST}" --list >/dev/null 2>&1; then
-  echo "  PASS  custom.just parses (just --list)"
+# --- greetd PAM keyring unlock stack ---
+echo "--- Checking greetd PAM stack ---"
+if [[ -f /etc/pam.d/greetd ]] && grep -q "pam_gnome_keyring.so" /etc/pam.d/greetd; then
+  echo "  PASS  /etc/pam.d/greetd present with gnome-keyring unlock"
 else
-  echo "  FAIL  custom.just does not parse — just --list failed"
+  echo "  FAIL  /etc/pam.d/greetd missing or lacks pam_gnome_keyring"
   exit 1
 fi
 

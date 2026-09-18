@@ -3,6 +3,12 @@
 - [x] apps-verify.sh fails
 - [x] desktop-verify.sh fails
 - [x] all scripts need to be more verbose at every step to be useful in github workflows
-- [ ] integrate texlive niceties likely from archive repo in github
+- [x] integrate texlive niceties likely from archive repo in github
 - [x] also get the brew setup from one my past projects where brew packages were immediately available after 1st login
+- [ ] Make sure security best practices are used throughout the halcyon project
+- [ ] verify that the python packages installed correctly.
 - [ ] gets some just files from my previous projects
+- [ ] Check that pyprland systemd service is running or not in the running system
+- [ ] try to avoid install steam, lutris from flatpaks
+- [ ] From the logs make sure all non-fedora repos are removed after package is installed from it. Also make sure that everything is correct and in order and that the github workflow performed without issues.
+- [ ] Carefully study the rakuos linux project and its various repositories and then, from the rakuos project, implement P03 kernel, native-gaming, nvidia integration with P03 kernel, plymouth theming with my own logo while always using the bluebuild system. Do not implement the Containerfile system from the rakuos repos. Also do not implement their rum package manager. And only explain to me in a nix.md file how the rakuos project sets up nix.
