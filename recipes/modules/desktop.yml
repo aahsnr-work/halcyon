@@ -8,7 +8,7 @@ modules:
         - lionheartp/Hyprland
     install:
       skip-unavailable: false
-      install-weak-deps: true
+      install-weak-deps: false
       packages:
         - cliphist
         - hyprland-git
