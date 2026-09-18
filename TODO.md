@@ -12,5 +12,5 @@
 - [ ] try to avoid install steam, lutris from flatpaks
 - [ ] From the logs make sure all non-fedora repos are removed after package is installed from it. Also make sure that everything is correct and in order and that the github workflow performed without issues.
 - [ ] Carefully study the rakuos linux project and its various repositories and then, from the rakuos project, implement P03 kernel, native-gaming, nvidia integration with P03 kernel, plymouth theming with my own logo while always using the bluebuild system. Do not implement the Containerfile system from the rakuos repos. Also do not implement their rum package manager. And only explain to me in a nix.md file how the rakuos project sets up nix.
-
 - [ ] Convert all flatpaks to manual installs, including mailsping
+- [ ] Implement adguard home to halcyon and most abilities from opensense
