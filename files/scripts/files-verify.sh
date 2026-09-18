@@ -198,6 +198,48 @@ else
   exit 1
 fi
 
+# --- greetd + noctalia-greeter wiring ---
+# Checked here (not in desktop-verify.sh) because /etc/greetd/config.toml is
+# copied by THIS module's files tree — when desktop.yml ran earlier, the file
+# on disk was still the greetd RPM's stock `agreety` config.
+echo "--- Checking greetd + noctalia-greeter wiring ---"
+if [[ -f /etc/greetd/config.toml ]]; then
+  echo "  PASS  /etc/greetd/config.toml present"
+else
+  echo "  FAIL  /etc/greetd/config.toml missing"
+  exit 1
+fi
+
+GREETER_CMD=$(awk -F'"' '/^[[:space:]]*command[[:space:]]*=/{print $2; exit}' /etc/greetd/config.toml 2>/dev/null || true)
+if [[ "${GREETER_CMD}" == "/usr/bin/noctalia-greeter-session" ]]; then
+  echo "  PASS  config.toml command is /usr/bin/noctalia-greeter-session"
+else
+  echo "  FAIL  config.toml command '${GREETER_CMD:-<unset>}' is not /usr/bin/noctalia-greeter-session"
+  exit 1
+fi
+
+cfg_user=$(awk -F'"' '/^[[:space:]]*user[[:space:]]*=/{print $2; exit}' /etc/greetd/config.toml 2>/dev/null || true)
+if [[ -n "${cfg_user}" ]] && id "${cfg_user}" >/dev/null 2>&1; then
+  echo "  PASS  config.toml user '${cfg_user}' exists"
+else
+  echo "  FAIL  config.toml user '${cfg_user:-<unset>}' does not exist — greetd would crash-loop"
+  exit 1
+fi
+
+if [[ -x /usr/bin/noctalia-greeter-session ]]; then
+  echo "  PASS  /usr/bin/noctalia-greeter-session present and executable"
+else
+  echo "  FAIL  /usr/bin/noctalia-greeter-session missing or not executable"
+  exit 1
+fi
+
+if [[ -f /usr/lib/tmpfiles.d/noctalia-greeter-state.conf ]]; then
+  echo "  PASS  /var/lib/noctalia-greeter tmpfiles rule present"
+else
+  echo "  FAIL  noctalia-greeter state-dir tmpfiles missing — greeter state would not persist"
+  exit 1
+fi
+
 # --- Brew assets (Brewfile staged by brew.yml; units by the systemd
 #     module's file copy; payload itself is verified in brew-verify.sh) ---
 echo "--- Checking brew assets ---"

@@ -74,50 +74,17 @@ else
   exit 1
 fi
 
-# --- greetd system user (§1.18) ---
+# --- greetd system user (§1.18). The config.toml consistency + noctalia
+#     wiring gates live in files-verify.sh: they check the halcyon
+#     config.toml, which files.yml only copies AFTER this module runs
+#     (here /etc/greetd/config.toml is still the greetd RPM's stock
+#     `agreety` config) ---
 echo "--- Checking greetd system user ---"
 if id greetd &>/dev/null; then
   uid=$(id -u greetd)
   echo "  PASS  greetd system user present (uid=${uid})"
 else
   echo "  FAIL  greetd user missing — config.toml user directive will break login"
-  echo "::endgroup::"
-  exit 1
-fi
-
-# --- greetd config must reference an account that exists (Fedora uses
-#     'greetd'; 'greeter' is the Arch convention and does not exist here) ---
-echo "--- Checking greetd config.toml consistency ---"
-cfg_user=$(awk -F'"' '/^[[:space:]]*user[[:space:]]*=/{print $2; exit}' /etc/greetd/config.toml 2>/dev/null || true)
-if [ -n "${cfg_user}" ] && id "${cfg_user}" >/dev/null 2>&1; then
-  echo "  PASS  config.toml user '${cfg_user}' exists"
-else
-  echo "  FAIL  config.toml user '${cfg_user:-<unset>}' does not exist on Fedora — greetd would crash-loop"
-  echo "::endgroup::"
-  exit 1
-fi
-
-# --- noctalia-greeter wiring (config command must be the wrapper, absolute) ---
-echo "--- Checking noctalia-greeter wiring ---"
-GREETER_CMD=$(awk -F'"' '/^[[:space:]]*command[[:space:]]*=/{print $2; exit}' /etc/greetd/config.toml 2>/dev/null || true)
-if [ "${GREETER_CMD}" = "/usr/bin/noctalia-greeter-session" ]; then
-  echo "  PASS  config.toml command is /usr/bin/noctalia-greeter-session"
-else
-  echo "  FAIL  config.toml command '${GREETER_CMD:-<unset>}' is not /usr/bin/noctalia-greeter-session"
-  echo "::endgroup::"
-  exit 1
-fi
-if [ -x /usr/bin/noctalia-greeter-session ]; then
-  echo "  PASS  /usr/bin/noctalia-greeter-session present and executable"
-else
-  echo "  FAIL  /usr/bin/noctalia-greeter-session missing or not executable"
-  echo "::endgroup::"
-  exit 1
-fi
-if [ -f /usr/lib/tmpfiles.d/noctalia-greeter-state.conf ]; then
-  echo "  PASS  /var/lib/noctalia-greeter tmpfiles rule present"
-else
-  echo "  FAIL  noctalia-greeter state-dir tmpfiles missing — greeter would fail to persist state"
   echo "::endgroup::"
   exit 1
 fi
