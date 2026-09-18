@@ -27,8 +27,8 @@ modules:
       - install-obsidian.sh
       - install-zotero.sh
       - install-pyprland.sh
-      - install-python-packages.sh
       - install-texlive.sh
+      - install-python-packages.sh
 
   - type: script
     scripts:
