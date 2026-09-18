@@ -164,8 +164,10 @@ for bin_name in fconf fe ff fkill fp fssh rmi rmtmp screenshot se; do
 done
 
 echo "--- Security: venv/payload ownership and modes ---"
-if [ -n "$(find /usr/lib/halcyon-python -perm -0002 -print -quit 2>/dev/null)" ]; then
-  echo "  FAIL  world-writable files inside /usr/lib/halcyon-python"
+ww_files="$(find /usr/lib/halcyon-python ! -type l -perm -0002 -print 2>/dev/null || true)"
+if [ -n "${ww_files}" ]; then
+  echo "  FAIL  world-writable files inside /usr/lib/halcyon-python:"
+  echo "${ww_files}" | head -n 10 | sed 's/^/          /'
   echo "::endgroup::"
   exit 1
 else

@@ -85,6 +85,12 @@ for pkg in "${EXPECTED[@]}"; do
 done
 echo "::endgroup::"
 
+echo "::group::install-python-packages — secure virtualenv permissions"
+chown -R root:root "${VENV_DIR}"
+chmod -R go-w "${VENV_DIR}"
+echo "  OK    ${VENV_DIR} permissions secured (root:root, non-world-writable)"
+echo "::endgroup::"
+
 echo "::group::install-python-packages — smoke tests"
 dump_version="$(dump-to-markdown --version)"
 echo "  OK    dump-to-markdown ${dump_version}"
