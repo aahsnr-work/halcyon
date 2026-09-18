@@ -80,25 +80,66 @@ echo "  OK    /usr/bin/obsidian → ${INSTALL_DIR}/obsidian"
 echo "::endgroup::"
 
 echo "::group::install-obsidian — desktop entry & icons"
-if [ -f "${INSTALL_DIR}/obsidian.desktop" ]; then
-  install -Dm644 "${INSTALL_DIR}/obsidian.desktop" /usr/share/applications/obsidian.desktop
-  sed -i 's|^Exec=.*|Exec=/usr/bin/obsidian %U|' /usr/share/applications/obsidian.desktop
-  sed -i 's|^Icon=.*|Icon=obsidian|' /usr/share/applications/obsidian.desktop
-  echo "  OK    /usr/share/applications/obsidian.desktop installed & patched"
-else
-  echo "  WARN  obsidian.desktop not found inside AppImage — skipping"
+# Obsidian's internal AppImage layout has changed across releases (desktop
+# file at the root, under usr/share/applications/, renamed Obsidian.desktop,
+# or absent). Discover it instead of probing one fixed path, and generate a
+# complete entry if upstream omitted it — build-scripts-verify.sh hard-fails
+# on a missing /usr/share/applications/obsidian.desktop.
+echo "--- Locating desktop entry ---"
+DESKTOP_SRC=""
+while IFS= read -r candidate; do
+  DESKTOP_SRC="${candidate}"
+  break
+done < <(find squashfs-root -maxdepth 5 -iname '*.desktop' \
+  \( -ipath '*obsidian*' -o -iname 'obsidian.desktop' \) 2>/dev/null | sort)
+if [ -z "${DESKTOP_SRC}" ]; then
+  DESKTOP_SRC=$(find squashfs-root -maxdepth 5 -iname '*.desktop' 2>/dev/null | head -n1)
 fi
 
-icon_installed=false
-for icon in "${INSTALL_DIR}"/usr/share/icons/hicolor/*/apps/obsidian.png "${INSTALL_DIR}/obsidian.png"; do
-  if [ -f "${icon}" ]; then
-    install -Dm644 "${icon}" /usr/share/icons/hicolor/512x512/apps/obsidian.png
-    echo "  OK    icon installed from ${icon}"
-    icon_installed=true
-    break
+if [ -n "${DESKTOP_SRC}" ]; then
+  install -Dm644 "${DESKTOP_SRC}" /usr/share/applications/obsidian.desktop
+  sed -i 's|^Exec=.*|Exec=/usr/bin/obsidian %U|' /usr/share/applications/obsidian.desktop
+  sed -i 's|^Icon=.*|Icon=obsidian|' /usr/share/applications/obsidian.desktop
+  echo "  OK    obsidian.desktop installed from ${DESKTOP_SRC} & patched"
+else
+  cat >/usr/share/applications/obsidian.desktop <<'EOF'
+[Desktop Entry]
+Name=Obsidian
+Comment=Focus on your notes
+Exec=/usr/bin/obsidian %U
+Terminal=false
+Type=Application
+Icon=obsidian
+Categories=Office;
+MimeType=x-scheme-handler/obsidian;
+StartupWMClass=obsidian
+EOF
+  echo "  WARN  no .desktop found inside AppImage — generated /usr/share/applications/obsidian.desktop"
+fi
+
+if command -v desktop-file-validate >/dev/null 2>&1; then
+  if desktop-file-validate /usr/share/applications/obsidian.desktop; then
+    echo "  OK    desktop-file-validate passed"
+  else
+    echo "  WARN  desktop-file-validate reported issues — non-fatal"
   fi
-done
-if [ "${icon_installed}" = true ]; then :; else echo "  WARN  no icon file found inside AppImage"; fi
+fi
+
+echo "--- Locating icon ---"
+icon_installed=false
+ICON_SRC=""
+while IFS= read -r candidate; do
+  ICON_SRC="${candidate}"
+  break
+done < <(find squashfs-root \( -ipath '*hicolor*obsidian*.png' -o -ipath '*icons*obsidian*.png' \) 2>/dev/null | sort -V | tail -n1)
+[ -z "${ICON_SRC}" ] && ICON_SRC=$(find squashfs-root -maxdepth 2 -iname 'obsidian*.png' 2>/dev/null | head -n1)
+if [ -n "${ICON_SRC}" ]; then
+  install -Dm644 "${ICON_SRC}" /usr/share/icons/hicolor/512x512/apps/obsidian.png
+  echo "  OK    icon installed from ${ICON_SRC}"
+  icon_installed=true
+else
+  echo "  WARN  no icon file found inside AppImage"
+fi
 
 echo "--- Updating desktop database and icon cache ---"
 update-desktop-database /usr/share/applications &>/dev/null || true
