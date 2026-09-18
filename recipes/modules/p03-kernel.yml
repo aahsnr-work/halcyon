@@ -18,20 +18,22 @@ modules:
       - p03-keygen.sh
 
   - type: dnf
-    copr:
-      - catpieleaf/kernel-p03
+    repos:
+      copr:
+        - catpieleaf/kernel-p03
     install:
       install-weak-deps: false
       packages:
         - kernel-p03
         - kernel-p03-nvidia-open
     remove:
-      - kernel
-      - kernel-core
-      - kernel-devel
-      - kernel-devel-matched
-      - kernel-modules
-      - kmod-nvidia
+      packages:
+        - kernel
+        - kernel-core
+        - kernel-devel
+        - kernel-devel-matched
+        - kernel-modules
+        - kmod-nvidia
 
   - type: script
     scripts:
