@@ -19,17 +19,41 @@ trap 'echo "  INFO  cleaning up ${TEXLIVE_TMP}"; rm -rf "${TEXLIVE_TMP}"' EXIT
 echo "::endgroup::"
 
 echo "::group::install-texlive — download installer"
-echo "--- Fetching install-tl-unx.tar.gz from CTAN ---"
+echo "--- Fetching install-tl-unx.tar.gz ---"
 # install-tl verifies downloads against TeX Live's GPG signatures by default
 # (install-tl manual) as long as gpg is present — keep it that way; never pass
 # --no-verify-downloads.
 if ! command -v gpg >/dev/null 2>&1; then
   echo "  WARN  gpg not found in PATH — install-tl signature verification will be skipped"
 fi
-if ! curl -fsSL --progress-bar \
-  https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz \
-  -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
-  echo "  FAIL  Could not download install-tl-unx.tar.gz from CTAN" >&2
+# mirror.ctan.org is a redirector that lands on a RANDOM CTAN mirror; some
+# mirrors intermittently serve broken TLS chains, which aborts curl with a
+# certificate error (--retry does not retry those). Try pinned reliable
+# mirrors in order instead. Keep this list in sync with the -repository used
+# for the installer run below.
+TEXLIVE_MIRRORS=(
+  "https://mirrors.mit.edu/CTAN/systems/texlive/tlnet"
+  "https://ftp.fau.de/ctan/systems/texlive/tlnet"
+  "https://ctan.math.illinois.edu/systems/texlive/tlnet"
+  "https://mirror.ctan.org/systems/texlive/tlnet"
+)
+TARBALL=""
+for mirror in "${TEXLIVE_MIRRORS[@]}"; do
+  echo "  INFO  trying ${mirror}"
+  if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 600 --progress-bar \
+      "${mirror}/install-tl-unx.tar.gz" -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
+    if gzip -t "${TEXLIVE_TMP}/install-tl-unx.tar.gz" 2>/dev/null; then
+      TARBALL="${TEXLIVE_TMP}/install-tl-unx.tar.gz"
+      echo "  OK    downloaded install-tl-unx.tar.gz from ${mirror}"
+      break
+    fi
+    echo "  WARN  tarball from ${mirror} failed the gzip integrity check — trying next mirror"
+  else
+    echo "  WARN  download from ${mirror} failed — trying next mirror"
+  fi
+done
+if [ -z "${TARBALL}" ]; then
+  echo "  FAIL  Could not download install-tl-unx.tar.gz from any TeX Live mirror" >&2
   echo "::endgroup::"
   exit 1
 fi
