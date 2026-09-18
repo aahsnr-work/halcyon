@@ -45,5 +45,20 @@ pathprepend "${HOME}/bin"
 pathprepend "/nix/var/nix/profiles/default/bin"
 pathprepend "${HOME}/.nix-profile/bin"
 
+# Belt-and-suspenders: ensure system paths are always present.
+#
+# Normally /etc/profile's pathmunge() calls happen before profile.d/ is
+# sourced, so these dirs are already in PATH.  However some session starters
+# (greetd → tuigreet → start-hyprland) propagate the PAM/systemd-user
+# environment directly to child processes without re-running /etc/profile.
+# If /etc/environment.d/10-homebrew.conf ever produces a broken PATH (e.g.
+# during a generator run where $PATH is unset), those sessions would end up
+# with no system binaries.  Explicitly appending here covers that corner case
+# without disturbing the priority of user-space dirs already prepended above.
+for _syspath in /sbin /bin /usr/sbin /usr/bin /usr/local/sbin /usr/local/bin; do
+  pathprepend "${_syspath}"
+done
+unset _syspath
+
 # Export PATH
 export PATH
