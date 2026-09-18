@@ -8,11 +8,10 @@ modules:
         - lionheartp/Hyprland
     install:
       skip-unavailable: false
-      install-weak-deps: false
+      install-weak-deps: true
       packages:
         - cliphist
         - hyprland-git
-        - hyprland-guiutils
         - hyprpwcenter
         - noctalia-git
         - noctalia-greeter-git

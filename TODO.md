@@ -14,5 +14,5 @@
 - [ ] Carefully study the rakuos linux project and its various repositories and then, from the rakuos project, implement P03 kernel, native-gaming, nvidia integration with P03 kernel, plymouth theming with my own logo while always using the bluebuild system. Do not implement the Containerfile system from the rakuos repos. Also do not implement their rum package manager. And only explain to me in a nix.md file how the rakuos project sets up nix.
 - [ ] Convert all flatpaks to manual installs, including mailsping
 - [ ] Implement adguard home to halcyon and most abilities from opensense
-- [ ] Implement hardened security for the public repo and github workflow.
+- [ ] Implement hardened security for all the files in public repo and github workflow, as well as for the github repo.
 - [ ] Harden the custom image from securefin linux as well
