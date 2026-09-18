@@ -1,0 +1,38 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+# p03-kernel.yml — RakuOS-style P03 kernel switch (COPR catpieleaf/kernel-p03).
+# kernel-p03 = CachyOS/TKG/XanMod/Clear-Linux patched kernel, x86_64-v3 +
+# ThinLTO (kernel-p03-gcc is the v2 fallback — not used here, halcyon
+# targets v3-capable hardware). NVIDIA = kernel-p03-nvidia-open: open
+# modules built IN the COPR for driver 615.71.09 — exactly the negativo17
+# userland version the base already ships, so the userland stays untouched
+# and only the kernel + its kmod swap. No kargs required. No akmods/DKMS
+# anywhere (modules are prebuilt upstream). Secure Boot: p03-keygen.sh
+# generates the signing keypair before install; the user enrolls
+# /etc/kernel/certs/p03-kernel/mok.der once via mokutil.
+# The Fedora (OGC 7.2.4) kernel and its kmod-nvidia are removed — RakuOS
+# does the same on adoption.
+modules:
+  - type: script
+    scripts:
+      - p03-keygen.sh
+
+  - type: dnf
+    copr:
+      - catpieleaf/kernel-p03
+    install:
+      install-weak-deps: false
+      packages:
+        - kernel-p03
+        - kernel-p03-nvidia-open
+    remove:
+      - kernel
+      - kernel-core
+      - kernel-devel
+      - kernel-devel-matched
+      - kernel-modules
+      - kmod-nvidia
+
+  - type: script
+    scripts:
+      - p03-verify.sh

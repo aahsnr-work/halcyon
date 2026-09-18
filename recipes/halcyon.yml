@@ -18,9 +18,11 @@ labels:
 modules:
   # ORDER IS SIGNIFICANT — removals first (constraint 5), services/branding last.
   - from-file: modules/removals.yml
+  - from-file: modules/p03-kernel.yml
   - from-file: modules/core.yml
   - from-file: modules/desktop.yml
   - from-file: modules/apps.yml
+  - from-file: modules/native-gaming.yml
   - from-file: modules/fonts.yml
   - from-file: modules/flatpaks.yml
   - from-file: modules/nix.yml

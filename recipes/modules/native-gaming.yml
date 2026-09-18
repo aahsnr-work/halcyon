@@ -1,0 +1,19 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+# native-gaming.yml — RakuOS-style native (non-Flatpak) gaming additions.
+# Steam, MangoHud and gamemode already ship natively in the bazzite base;
+# this adds Lutris (Fedora repos) and Heroic Games Launcher (official RPM).
+modules:
+  - type: dnf
+    install:
+      install-weak-deps: false
+      packages:
+        - lutris
+
+  - type: script
+    scripts:
+      - install-heroic.sh
+
+  - type: script
+    scripts:
+      - native-gaming-verify.sh

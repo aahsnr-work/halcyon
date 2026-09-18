@@ -20,12 +20,15 @@ echo "--- Checking Plymouth theme ---"
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
   current_theme=$(plymouth-set-default-theme 2>/dev/null || echo "(unknown)")
   echo "  INFO  current Plymouth theme: ${current_theme}"
-  if plymouth-set-default-theme theme 2>/dev/null; then
-    echo "  PASS  Plymouth 'theme' theme applied"
-  elif plymouth-set-default-theme spinner 2>/dev/null; then
-    echo "  NOTE  Plymouth 'theme' not found; fell back to 'spinner'"
+  if plymouth-set-default-theme halcyon 2>/dev/null; then
+    echo "  PASS  Plymouth 'halcyon' theme applied"
+    if [ -f /usr/share/plymouth/themes/halcyon/background.png ]; then
+      echo "  PASS  splash background asset present"
+    else
+      echo "  NOTE  splash background missing — theme falls back to plugin default"
+    fi
   else
-    echo "  NOTE  Plymouth theme set failed — non-fatal (boot splash only)"
+    echo "  NOTE  Plymouth 'halcyon' set failed — keeping previous theme (boot splash only)"
   fi
 else
   echo "  SKIP  plymouth-set-default-theme not in PATH (headless build)"

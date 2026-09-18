@@ -317,6 +317,36 @@ Two rules to keep in mind:
   machine that already has it. Remove those by hand
   (`brew uninstall <formula>`).
 
+## RakuOS port: P03 kernel, native gaming, NVIDIA, Plymouth
+
+Ported from the RakuOS project (always via BlueBuild; RakuOS's
+Containerfile system and `rum` package manager are deliberately not used;
+nix setup differences are documented in [`nix.md`](nix.md)):
+
+- **P03 kernel** ([CatPieLeaf/linux-p03](https://github.com/CatPieLeaf/linux-p03),
+  COPR `catpieleaf/kernel-p03`) replaces the base's OGC 7.2.4 kernel:
+  CachyOS/TKG/XanMod/Clear-Linux patches, BBRv3+FQ, ADIOS I/O, Lazy PREEMPT.
+  The Fedora kernel set and `kmod-nvidia` (OGC modules) are removed —
+  RakuOS does the same on adoption. Requires an **x86_64-v3** CPU
+  (`kernel-p03-gcc` is the v2 fallback, not used here).
+- **NVIDIA with P03**: `kernel-p03-nvidia-open` ships NVIDIA-open **615.71.09**
+  modules built in the COPR for this exact kernel — the same driver version
+  as the negativo17 userland the base already carries, so the userland stays
+  and no akmods/DKMS/.run installer is involved. **Secure Boot**: the signing
+  keypair is generated in-image at `/etc/kernel/certs/p03-kernel/mok.der`;
+  enroll once with `sudo mokutil --import /etc/kernel/certs/p03-kernel/mok.der`
+  (Secure Boot systems only).
+- **Native gaming**: `lutris` (Fedora repos) and Heroic Games Launcher
+  (official RPM, pinned from GitHub releases) join the base's native
+  Steam/MangoHud/gamemode — no Flatpak gaming.
+- **Plymouth**: the `halcyon` two-step theme is now shipped with a splash
+  background (placeholder: `astronaut.png` — swap
+  `files/system/usr/share/plymouth/themes/halcyon/background.png` and add a
+  `watermark.png` for your own logo) and is set as the default; the
+  initramfs is regenerated afterwards (`type: initramfs` in `branding.yml`).
+
+Gated by `p03-verify.sh` and `native-gaming-verify.sh` at build time.
+
 ## Flatpak policy
 
 `default-flatpaks@v1` (v2 has no `remove:` support). Install/remove lists apply

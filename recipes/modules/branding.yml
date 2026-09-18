@@ -1,8 +1,10 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
-# branding.yml — os-release identity + plymouth/motd/backgrounds placeholders.
-# Plymouth theme files, motd text and wallpapers are TODO(user) assets (§7.7);
-# no invented logos/wallpapers — fallback to spinner until real assets land.
+# branding.yml — os-release identity + Plymouth/MOTD/backgrounds.
+# The halcyon Plymouth theme (two-step, background shipped) is set as the
+# default by branding-verify.sh; the initramfs module below regenerates
+# afterwards so the themed splash is active in early boot (and covers the
+# P03 kernel from p03-kernel.yml).
 modules:
   - type: os-release
     properties:
@@ -14,3 +16,8 @@ modules:
   - type: script
     scripts:
       - branding-verify.sh
+
+  # Regenerate the initramfs AFTER the halcyon theme is set (early-boot
+  # splash) and AFTER the P03 kernel swap (p03-kernel.yml) so the new
+  # kernel boots with the themed splash.
+  - type: initramfs
