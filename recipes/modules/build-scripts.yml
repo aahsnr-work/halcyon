@@ -22,14 +22,14 @@ modules:
       - source: python-packages
         destination: /usr/src/python-packages # staged for install-python-packages.sh; removed after install
 
-  - type: script@v1
+  - type: script
     scripts: # official mechanism: executes files/scripts/*.sh ($CONFIG_DIRECTORY/scripts)
       - install-obsidian.sh
       - install-zotero.sh
       - install-pyprland.sh
-      - install-texlive.sh
       - install-python-packages.sh
+      - install-texlive.sh
 
-  - type: script@v1
+  - type: script
     scripts:
       - build-scripts-verify.sh
