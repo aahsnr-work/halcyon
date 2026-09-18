@@ -72,23 +72,23 @@ else
   exit 1
 fi
 
-# # --- TeX Live ---
-# echo "--- Checking TeX Live ---"
-# if test -d /usr/lib/texlive; then
-#   echo "  PASS  /usr/lib/texlive directory present"
-# else
-#   echo "  FAIL  /usr/lib/texlive directory missing"
-#   echo "::endgroup::"
-#   exit 1
-# fi
-#
-# if test -f /etc/profile.d/texlive.sh; then
-#   echo "  PASS  /etc/profile.d/texlive.sh present"
-# else
-#   echo "  FAIL  /etc/profile.d/texlive.sh missing"
-#   echo "::endgroup::"
-#   exit 1
-# fi
+# --- TeX Live ---
+echo "--- Checking TeX Live ---"
+if test -d /usr/lib/texlive; then
+  echo "  PASS  /usr/lib/texlive directory present"
+else
+  echo "  FAIL  /usr/lib/texlive directory missing"
+  echo "::endgroup::"
+  exit 1
+fi
+
+if test -f /etc/profile.d/texlive.sh; then
+  echo "  PASS  /etc/profile.d/texlive.sh present"
+else
+  echo "  FAIL  /etc/profile.d/texlive.sh missing"
+  echo "::endgroup::"
+  exit 1
+fi
 
 # --- Deliberately retained packages (deviation S) ---
 echo "--- Checking deliberately retained packages ---"

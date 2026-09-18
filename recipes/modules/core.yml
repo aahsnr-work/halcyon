@@ -2,6 +2,10 @@
 # yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
 modules:
   - type: dnf
+    group-install:
+      with-optional: false
+      packages:
+        - custom-environment
     install:
       install-weak-deps: false
       skip-unavailable: false
