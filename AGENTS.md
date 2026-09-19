@@ -265,8 +265,11 @@ that is the build-time smoke test.
   describe an ordering that no longer holds. Treat their comments as historical.
 - **Package names change between Fedora releases.** Terra retired
   `terra-gamescope`/`terra-mangohud`; `lazygit` ships as
-  `golang-github-jesseduffield-lazygit`. Before adding a package, verify it
-  resolves for F44 from the repo you expect:
+  `golang-github-jesseduffield-lazygit`. Fedora 44 renames to know:
+  `du-dust` (not dust), `pandoc-cli` (not pandoc), `nodejs24` +
+  `nodejs24-npm` (not nodejs/npm), `adw-gtk3-theme` (not adw-gtk3),
+  `Thunar` (capital T). Before adding a package, verify it resolves for F44
+  from the repo you expect:
   `dnf5 repoquery --repo=<id> --qf '%{name}\n' <name>`.
 
 ---

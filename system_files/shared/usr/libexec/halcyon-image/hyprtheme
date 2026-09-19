@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# adw-gtk3-dark (Fedora package adw-gtk3) — Colloid-Purple-Dark-Catppuccin
+# adw-gtk3-dark (Fedora package adw-gtk3-theme) — Colloid-Purple-Dark-Catppuccin
 # was the pre-reorg choice but ships in no enabled repo (verified 2026-09-19)
 THEME='adw-gtk3-dark'
 ICONS='Papirus-Dark'

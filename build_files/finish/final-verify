@@ -31,7 +31,7 @@ gate "gaming keeper packages"            sh -c 'rpm -q scx-scheds scx-tools umu-
 gate "steam installed"                   rpm -q steam
 gate "bazzite-steam wrapper"             test -x /usr/bin/bazzite-steam
 gate "steam desktop -> bazzite-steam"    grep -q 'bazzite-steam' /usr/share/applications/steam.desktop
-gate "devtools (terra + fedora)"         sh -c "rpm -q zed starship yazi zellij golang-github-jesseduffield-lazygit bat eza fzf pandoc chezmoi"
+gate "devtools (terra + fedora)"         sh -c "rpm -q zed starship yazi zellij golang-github-jesseduffield-lazygit bat eza fzf pandoc-cli chezmoi"
 echo "::endgroup::"
 
 echo "::group::final-verify — repo end state"
