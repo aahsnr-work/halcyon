@@ -101,7 +101,7 @@ image carries Fedora repos only.
 
 ## Adding or removing packages (packages.json)
 
-**`build_files/packages.json` is the single source of truth** for every
+**`packages.json` (repo root) is the single source of truth** for every
 package in the image — dnf and flatpak alike, in the
 [ublue-os/main](https://github.com/ublue-os/main) style. The build stages
 never hardcode package lists: each stage sources `build_files/packages-lib`

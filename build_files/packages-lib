@@ -1,4 +1,4 @@
-# packages-lib — jq accessors for build_files/packages.json.
+# packages-lib — jq accessors for packages.json (ctx root, from repo root).
 # Source this file from any stage that consumes the package catalog:
 #   source /ctx/packages-lib
 # Style follows ublue-os/main's build_files/packages.sh (jq fail-fast

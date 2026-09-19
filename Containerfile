@@ -18,6 +18,7 @@ ARG FEDORA_VERSION=44
 # --- build context: semantic helpers, never baked into the image ---
 FROM scratch AS ctx
 COPY build_files /
+COPY packages.json /
 
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 
