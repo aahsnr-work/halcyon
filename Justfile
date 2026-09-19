@@ -78,6 +78,14 @@ build $target_image=image_name $tag=default_tag:
         --tag "${target_image}:${tag}" --file Containerfile .
 
 # Generate the full alias-tag set (template scheme)
+# Image Name (template recipe — CI resolves the image name through it)
+[group('Utility')]
+[private]
+image_name $target_image=image_name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "${target_image}"
+
 [group('Utility')]
 generate-default-tag $tag=default_tag:
     #!/usr/bin/env bash
