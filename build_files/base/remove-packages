@@ -27,10 +27,13 @@ echo "::group::remove-packages — Step B: proven-present removals (packages.jso
 # is resolved through rpm -qa first, so entries absent from the base are
 # tolerated instead of failing the transaction.
 readarray -t REMOVAL_CANDIDATES < <(packages_excludes)
+PRESENT=()
 if [ "${#REMOVAL_CANDIDATES[@]}" -gt 0 ]; then
   readarray -t PRESENT < <(rpm -qa --qf '%{NAME}\n' "${REMOVAL_CANDIDATES[@]}" 2>/dev/null | sort -u || true)
 fi
-if [ "${#PRESENT[@]:-0}" -gt 0 ]; then
+# NOTE: ${#arr[@]} admits no :-default (bash 'bad substitution') — the
+# array is initialized unconditionally above instead.
+if [ "${#PRESENT[@]}" -gt 0 ]; then
   echo "  INFO  removing ${#PRESENT[@]} present package(s): ${PRESENT[*]}"
   # --no-autoremove here: the base orphan sweep below is the only autoremove
   dnf5 -y remove --no-autoremove "${PRESENT[@]}"
