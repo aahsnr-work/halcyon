@@ -11,7 +11,7 @@ else
   echo 'HOME_URL=https://github.com/aahsnr-work/halcyon' >> /usr/lib/os-release
 fi
 # plymouth theme assets are generated from the baked astronaut wallpaper
-/ctx/build-plymouth-assets
+/ctx/branding/build-plymouth-assets
 echo "::endgroup::"
 
 echo "::group::image-info — image-info.json + sigstore policy assets"

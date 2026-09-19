@@ -52,73 +52,73 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
 # ---- Stage 1: removals FIRST — pristine-base blast radius (main ordering) --
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/remove-packages && /ctx/cleanup
+    /ctx/base/remove-packages && /ctx/cleanup
 
 # ---- Stage 2: shared external repos (RPM Fusion NVIDIA-excluded + negativo17)
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/setup-repos && /ctx/cleanup
+    /ctx/base/setup-repos && /ctx/cleanup
 
 # ---- Stage 3: p03 kernel + prebuilt nvidia-open modules (Stage K1) ---------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/install-kernel && /ctx/cleanup
+    /ctx/kernel/install-kernel && /ctx/cleanup
 
 # ---- Stage 4: core + desktop + gaming + apps -------------------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/install-packages && /ctx/packages-verify && /ctx/cleanup
+    /ctx/packages/install-packages && /ctx/packages/packages-verify && /ctx/cleanup
 
 # ---- Stage 5: Terra packages (user-editable list, exclusive resolution) ----
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/install-terra && /ctx/cleanup
+    /ctx/packages/install-terra && /ctx/cleanup
 
 # ---- Stage 6: devtools (Fedora brew-formula replacements) ------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/install-devtools && /ctx/cleanup
+    /ctx/packages/install-devtools && /ctx/cleanup
 
 # ---- Stage 7: nix (winter pattern) ------------------------------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/install-nix && /ctx/nix-verify && /ctx/cleanup
+    /ctx/runtime/install-nix && /ctx/runtime/nix-verify && /ctx/cleanup
 
 # ---- Stage 8: flatpak (flathub USER repo only) ------------------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/setup-flatpaks && /ctx/flatpaks-verify && /ctx/cleanup
+    /ctx/runtime/setup-flatpaks && /ctx/runtime/flatpaks-verify && /ctx/cleanup
 
 # ---- Stage 9: built apps (obsidian/zotero/pyprland/texlive/python) ---------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/install-built-apps && /ctx/built-apps-verify && /ctx/cleanup
+    /ctx/apps/install-built-apps && /ctx/apps/built-apps-verify && /ctx/cleanup
 
 # ---- Stage 10: ujust machinery (ublue-os-just) + uupd -----------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/setup-ujust && /ctx/ujust-verify && /ctx/cleanup
+    /ctx/runtime/setup-ujust && /ctx/runtime/ujust-verify && /ctx/cleanup
 
 # ---- Stage 11: system config (services, tmpfiles, chezmoi wiring) ----------
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/configure-system && /ctx/system-verify && /ctx/cleanup
+    /ctx/desktop/configure-system && /ctx/desktop/system-verify && /ctx/cleanup
 
 # ---- Stage 12: branding (os-release identity + plymouth theme) --------------
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/image-info && /ctx/branding-verify && /ctx/cleanup
+    /ctx/desktop/image-info && /ctx/desktop/branding-verify && /ctx/cleanup
 
 # ---- Stage 13: initramfs LAST (plymouth theme + nvidia hooks baked in) ------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/build-initramfs && /ctx/cleanup
+    /ctx/finish/build-initramfs && /ctx/cleanup
 
 # ---- Stage 14: finalize (repo sweep + end-of-build hygiene) -----------------
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/finalize
+    /ctx/finish/finalize
 
 # ---- Stage 15: final cross-cutting verification ------------------------------
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/final-verify
+    /ctx/finish/final-verify
 
 # ---- Final gate: hermetic bootc lint (bazzite pattern) -----------------------
 RUN --mount=type=tmpfs,target=/run --network=none ["bootc","container","lint"]

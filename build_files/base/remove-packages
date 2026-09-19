@@ -81,8 +81,8 @@ dnf5 -y autoremove || true
 echo "::endgroup::"
 
 echo "::group::remove-packages — Step C/D/E/F: guarded removals + footprint (existing scripts)"
-/ctx/guarded-removals
-/ctx/file-footprint
-/ctx/gnome-extensions
-/ctx/fonts-cleanup
+/ctx/base/guarded-removals
+/ctx/base/file-footprint
+/ctx/base/gnome-extensions
+/ctx/base/fonts-cleanup
 echo "::endgroup::"

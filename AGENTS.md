@@ -32,11 +32,26 @@ cosign.pub                 # public signing key (see §7 "signing gap")
 .containerignore           # keep docs/artifacts out of the build context
 
 build_files/               # the `ctx` stage — NEVER ends up in the image
-  <verb>-<subject>         # extensionless bash: install-kernel, setup-repos, ...
-  <stage>-verify           # per-stage gate: packages-verify, nix-verify, ...
   cleanup                  # end-of-RUN hygiene, called after every mutating RUN
   libdnf5.conf.d/          # dnf5 main-config drop-in (see §7)
   python-packages/         # 11 stdlib-only src-layout Python tools
+  base/                    # repos + removals: setup-repos, remove-packages,
+                           #   guarded-removals, file-footprint, gnome-extensions,
+                           #   fonts-cleanup
+  kernel/                  # install-kernel (p03 + NVIDIA)
+  packages/                # install-packages + packages-verify, install-terra,
+                           #   install-devtools
+  apps/                    # install-built-apps + built-apps-verify and the
+                           #   per-app installers (obsidian, zotero, pyprland,
+                           #   texlive, python-packages)
+  runtime/                 # install-nix + nix-verify, setup-flatpaks +
+                           #   flatpaks-verify, setup-ujust + ujust-verify
+  desktop/                 # configure-system + system-verify, image-info,
+                           #   build-plymouth-assets + branding-verify
+  finish/                  # build-initramfs, finalize, final-verify
+
+Scripts are extensionless bash at `<folder>/<verb>-<subject>`; verify
+companions live next to the stage they gate inside the same folder.
 
 system_files/shared/       # static tree COPY'd to / BEFORE any RUN stage
   etc/…  usr/…             # units, profile.d, greetd, plymouth, ujust modules,

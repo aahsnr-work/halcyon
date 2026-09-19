@@ -21,4 +21,4 @@
 - [ ] Install ticktick as rpm from official sources
 - [ ] chezmoi should be installed from the official fedora repo. Then the chezmoi setup in this branch should be exact same as the main branch
 - [ ] organize the bash scripts into logical folders since there are so many scripts.
-- [ ] Also implement the packages.json style from https://github.com/ublue-os/main so that it is easier to manage packages. Then the bash scripts in build files will just call from this json file
+- [ ] Also implement the packages.json style from https://github.com/ublue-os/main so that it is easier to manage packages. Then the bash scripts in build files will just call from this json file. Ask me any questions you need.
