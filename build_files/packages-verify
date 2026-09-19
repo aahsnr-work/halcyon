@@ -13,7 +13,7 @@ gate "greetd installed"                  rpm -q greetd
 gate "xdg-desktop-portal-hyprland"       rpm -q xdg-desktop-portal-hyprland
 gate "xdg-desktop-portal-gtk"            rpm -q xdg-desktop-portal-gtk
 gate "kitty + terminfo"                  rpm -q kitty kitty-terminfo
-gate "thunar + archive plugin"           rpm -q thunar thunar-archive-plugin
+gate "thunar + archive plugin"           rpm -q Thunar thunar-archive-plugin
 gate "greeter wrapper executable"        test -x /usr/bin/noctalia-greeter-session
 gate "greetd launches noctalia"          grep -qF 'noctalia-greeter-session' /etc/greetd/config.toml
 gate "fonts: jetbrains-mono"             rpm -q jetbrains-mono-fonts

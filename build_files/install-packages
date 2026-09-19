@@ -137,7 +137,7 @@ dnf5 -y --setopt=install_weak_deps=False install \
   papers \
   papirus-icon-theme \
   qt6ct \
-  thunar \
+  Thunar \
   thunar-archive-plugin \
   thunar-media-tags-plugin \
   thunar-vcs-plugin \
