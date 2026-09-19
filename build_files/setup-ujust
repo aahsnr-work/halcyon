@@ -5,7 +5,7 @@
 # Bazzite base; on fedora-bootc the same machinery is the `ublue-os-just` RPM
 # (COPR ublue-os/packages). `ujust update` then works through uupd exactly
 # like Bazzite's 10-update.just. The vendored bazzite/halcyon recipe modules
-# ship via files/system/usr/share/ublue-os/just/ (root COPY); this stage only
+# ship via the system_files/shared overlay (root COPY); this stage only
 # installs packages, registers imports, and wires the update timer.
 set -euo pipefail
 echo "::group::setup-ujust — ublue-os-just + uupd"

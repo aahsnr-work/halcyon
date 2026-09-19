@@ -1,23 +1,36 @@
+---
 name: build
 on:
   schedule:
     - cron: "00 08 * * *"
   push:
     branches: [container, main]
+    paths-ignore:
+      - "**/README.md"
+      - "**/MIGRATION.md"
+      - "**/TODO.md"
   pull_request:
   workflow_dispatch:
+
+env:
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build Custom Image
+  build_push:
+    name: Build and push image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       # Copr's download CDN intermittently 504s on repodata; poll until every
       # consumed COPR answers 200 (up to ~30 min) — consumed during the
       # transition (Hyprland/zen/desktop) AND for the p03 kernel (Stage K1).
@@ -41,43 +54,49 @@ jobs:
           echo "::error::Copr metadata still unavailable after 30 attempts — re-run later."
           exit 1
 
-      - uses: actions/checkout@v4
-
-      # free runner disk (equivalent of the action's maximize_build_space)
       - name: Maximize build space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
-            /usr/lib/jvm /opt/hostedtoolcache/CodeQL || true
-          sudo docker image prune --all --force || true
-          df -h /
+        uses: ublue-os/remove-unwanted-software@v9
 
-      - name: Build image
-        id: build
-        run: |
-          set -euo pipefail
-          DATE_TAG=$(date +%Y%m%d)
-          SHA_TAG=$(git rev-parse --short HEAD)
-          IMAGE=ghcr.io/${{ github.repository_owner }}/halcyon
-          # OCI labels consume IMAGE_VERSION (<fedora>.<yyyymmdd>, bazzite
-          # convention) and SOURCE_SHA (git revision) via Containerfile ARGs
-          podman build --pull --platform linux/amd64 \
-            --build-arg IMAGE_VERSION=44.${DATE_TAG} \
-            --build-arg SOURCE_SHA=$(git rev-parse HEAD) \
-            -t ${IMAGE}:latest -t ${IMAGE}:${DATE_TAG} \
-            -t ${IMAGE}:44 -t ${IMAGE}:${DATE_TAG}-44 -t ${IMAGE}:${SHA_TAG}-44 .
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "date_tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+      - name: Install just
+        uses: extractions/setup-just@v2
 
-      # Distinctive package-count report: run the freshly built image and
-      # write the census into the run summary (GITHUB_STEP_SUMMARY) plus a
-      # ::notice:: annotation. The census is also baked into the image at
+      - name: Check Just Syntax
+        run: just check
+
+      - name: Image Name
+        id: image-name
+        run: |
+          IMAGE_NAME=$(just image_name)
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_ENV"
+
+      - name: Default Tag
+        id: gen-default-tag
+        run: |
+          DEFAULT_TAG=$(just generate-default-tag)
+          echo "DEFAULT_TAG=${DEFAULT_TAG}" >> "$GITHUB_ENV"
+
+      - name: Prepare environment
+        run: |
+          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
+
+      # This actually builds the container image
+      - name: Build Image
+        id: build-image
+        run: |
+          just build \
+            "${IMAGE_NAME}" \
+            "${DEFAULT_TAG}"
+
+      # Distinctive package census: run the freshly built image and write the
+      # report to the run summary (GITHUB_STEP_SUMMARY) plus a ::notice::
+      # annotation. The census is also baked into the image at
       # /usr/share/halcyon/package-count by build_files/final-verify.
       - name: Package count report
         run: |
           set -euo pipefail
-          IMAGE="${{ steps.build.outputs.image }}:latest"
-          INFO=$(podman run --rm --entrypoint /bin/bash "$IMAGE" -c \
+          INFO=$(podman run --rm --entrypoint /bin/bash "${IMAGE_NAME}:${DEFAULT_TAG}" -c \
             'echo "count=$(rpm -qa | wc -l)"; echo "kernel=$(rpm -q --qf "%{VERSION}-%{RELEASE}.%{ARCH}" kernel-p03 2>/dev/null || echo n/a)"')
           COUNT=$(sed -n 's/^count=//p' <<< "$INFO")
           KVER=$(sed -n 's/^kernel=//p' <<< "$INFO")
@@ -88,33 +107,65 @@ jobs:
             echo "|---|---|"
             echo "| **Total installed RPM packages** | **${COUNT}** |"
             echo "| p03 kernel | ${KVER} |"
-            echo "| Source | \`${{ steps.build.outputs.image }}:${{ steps.build.outputs.sha_tag }}-44\` |"
+            echo "| Source | \`${IMAGE_REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=halcyon package count::${COUNT} RPMs installed (p03 kernel ${KVER})"
-          echo "  total installed RPM packages: ${COUNT}"
-          echo "  p03 kernel: ${KVER}"
 
-      # sign + push only on branch pushes (not PRs) — same semantics as the
-      # BlueBuild action had
-      - name: Login to GHCR
+      - name: Generate Build Tags
+        id: gen-build-tags
+        run: |
+          alias_tags="$(just generate-build-tags \
+                        "${IMAGE_NAME}" \
+                        "${DEFAULT_TAG}")"
+          echo "Tags for this Action..."
+          echo "${alias_tags}"
+          echo "alias_tags=${alias_tags}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag Image
+        id: tag-images
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          just tag-images \
+            "${IMAGE_NAME}" \
+            "${DEFAULT_TAG}" \
+            "${ALIAS_TAGS}"
+
+      # Push + sign only on branch pushes (not PRs) — same semantics as the
+      # BlueBuild era action had.
+      - name: Login to GitHub Container Registry
         if: github.event_name == 'push'
-        run: echo "${{ github.token }}" | \
-          podman login ghcr.io -u ${{ github.actor }} --password-stdin
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
-      - name: Install cosign
+      - name: Push To GHCR
+        if: github.event_name == 'push'
+        id: push-image
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          set -euo pipefail
+          for tag in ${ALIAS_TAGS}; do
+            podman push --digestfile=/tmp/digestfile "${IMAGE_NAME}:${tag}" \
+              "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+          done
+          digest=$(< /tmp/digestfile)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
         if: github.event_name == 'push'
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign and push
+      # Sign the manifest digest once — every alias tag shares it.
+      - name: Sign container image
         if: github.event_name == 'push'
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           COSIGN_PASSWORD: ""
+          DIGEST: ${{ steps.push-image.outputs.digest }}
         run: |
-          set -euo pipefail
-          IMAGE="${{ steps.build.outputs.image }}"
-          for tag in latest "${{ steps.build.outputs.date_tag }}" 44 \
-                     "${{ steps.build.outputs.date_tag }}-44" "${{ steps.build.outputs.sha_tag }}-44"; do
-            podman push "${IMAGE}:${tag}"
-            cosign sign --key env://COSIGN_PRIVATE_KEY --yes "${IMAGE}:${tag}"
-          done
+          cosign sign --key env://COSIGN_PRIVATE_KEY --yes \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
