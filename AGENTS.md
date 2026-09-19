@@ -242,6 +242,11 @@ that is the build-time smoke test.
 - **`rpm -q` is case-sensitive** while dnf is not: the Fedora package is
   `Thunar` (capital T) — `dnf install thunar` succeeds and `rpm -q thunar`
   fails. Query gates with the exact upstream name.
+- **Generated scripts: use quoted heredocs, not echo lines.** Building a
+  script with `echo "… $var …"` under `set -u` aborts on unbound positional
+  params (`$2` in awk snippets) and silently expands dollars you meant to
+  defer. Write the static body through a `<<'QUOTED'` heredoc and append
+  only the data-driven lines (see setup-flatpaks).
 - **bash -n cannot catch orphaned package lists.** When converting a
   hardcoded install list to packages.json readarray form, the old list can
   survive as bare continuation lines after `"${PKGS[@]}"` — syntactically
