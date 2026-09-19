@@ -4,7 +4,9 @@ set -uo pipefail
 
 echo "::group::fonts-cleanup — safe font package removal"
 
-PROTECT='^(fontconfig|fonts-filesystem|fontpackages|dejavu-sans-fonts|dejavu-sans-mono-fonts)(-|$)'
+# halcyon-installed fonts (10-packages.sh) must survive this stage too — this
+# script now runs AFTER the packages stage, not before it as in BlueBuild
+PROTECT='^(fontconfig|fonts-filesystem|fontpackages|dejavu-sans-fonts|dejavu-sans-mono-fonts|jetbrains-mono-fonts|google-noto-emoji-fonts|liberation-fonts|liberation-sans-fonts|liberation-serif-fonts|liberation-mono-fonts)(-|$)'
 removed=()
 kept=()
 skipped_required=()

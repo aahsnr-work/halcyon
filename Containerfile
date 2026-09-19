@@ -27,13 +27,15 @@ RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     /tmp/build.d/02-kernel.sh
 
-# Stage 3 — prune what fedora-bootc ships that halcyon rejects
-RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
-    /tmp/build.d/02-prune.sh
-
-# Stage 4 — core + desktop + gaming + apps packages (transitional: COPRs)
+# Stage 3 — core + desktop + gaming + apps packages (transitional: COPRs).
+# Must run BEFORE the prune stage: the guarded-removals keeper checks expect
+# steam/lutris/bazaar/… to be installed (the old Bazzite base shipped them).
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     /tmp/build.d/10-packages.sh
+
+# Stage 4 — prune, after packages (keeper checks need them installed)
+RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
+    /tmp/build.d/30-prune.sh
 
 # Stage 5 — devtools (Fedora brew-formula replacements; monorepo RPMs later)
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
