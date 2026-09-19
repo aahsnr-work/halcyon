@@ -31,9 +31,9 @@ REPO
 # Terra (zed, terra-gamescope i686, terra-mangohud i686, scx, umu, bazzite-portal)
 curl -fsSL "https://raw.githubusercontent.com/terrapkg/subatomic-repos/main/terra.repo" \
   -o /etc/yum.repos.d/terra.repo
+echo "excludepkgs=zlib" >> /etc/yum.repos.d/terra.repo   # terra zlib must not shadow Fedora (apps.yml exclude)
 # transitional COPRs (monorepo replaces these — MIGRATION.md §8)
 dnf5 -y copr enable -y lionheartp/Hyprland
 dnf5 -y copr enable -y sneexy/zen-browser
 dnf5 -y copr enable -y ublue-os/packages
-dnf5 -y copr enable -y catpieleaf/kernel-p03
 echo "::endgroup::"

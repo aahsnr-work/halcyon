@@ -1,6 +1,6 @@
 # MIGRATION.md — halcyon rebuild: bootc Containerfile + p03 kernel + RPM monorepo
 
-**Status:** plan (not yet executed) — replaces the former `ANDAMAN-MIGRATION.md`.
+**Status:** plan — **partially executed**: the halcyon `container` branch currently builds on the Bazzite base (kernel + NVIDIA akmods + gaming stack included) while the COPR CDN outage blocks the p03 stage; the fedora-bootc + p03 route below remains the documented target and will be executed when the CDN recovers (the `02-kernel.sh` stage is pre-written). — replaces the former `ANDAMAN-MIGRATION.md`.
 **Date:** 2026-09-19 · **Target Fedora:** 44 · **Plan iterations:** 5 (three required + two verification passes; logged in §1.3)
 
 ---
@@ -105,6 +105,8 @@ BlueBuild-era gates assert COPR vendor stamps (`Fedora Copr - user lionheartp`).
 ---
 
 ## 4. Kernel: p03 (staged) + NVIDIA-open
+
+> **Implementation status (2026-09-19):** the interim `container` branch uses the **ublue akmods pattern** instead — stock/pinned Fedora kernel from `ghcr.io/ublue-os/akmods:main-44` + prebuilt `nvidia-open` modules from `akmods-nvidia-open:main-44`, following `ublue-os/main`'s install.sh (kernel erase → shim kernel-install plugins → install 5 kernel RPMs + akmod RPMs → dracut). The p03 swap below remains the plan for Stage K2.
 
 ### 4.1 What p03 is (verified from the COPR page and CatPieLeaf/linux-p03)
 

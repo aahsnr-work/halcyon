@@ -23,5 +23,13 @@ cat > /usr/bin/ujust <<'SHIM'
 exec just --justfile /usr/share/halcyon/just/00-halcyon.just "$@"
 SHIM
 chmod 0755 /usr/bin/ujust
-[ -f /usr/share/halcyon/just/00-halcyon.just ] || printf '# halcyon ujust recipes (populated from files/justfiles)\n' > /usr/share/halcyon/just/00-halcyon.just
+mkdir -p /usr/share/halcyon/just
+cp /tmp/build.d/justfiles/*.just /usr/share/halcyon/just/
+cat > /usr/share/halcyon/just/00-halcyon.just <<'JUST'
+# halcyon ujust recipes — imports generated at build time
+JUST
+for jf in /usr/share/halcyon/just/*.just; do
+  [ "$(basename "$jf")" = "00-halcyon.just" ] && continue
+  echo "import \"$jf\"" >> /usr/share/halcyon/just/00-halcyon.just
+done
 echo "::endgroup::"
