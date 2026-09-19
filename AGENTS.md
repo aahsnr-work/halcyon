@@ -132,7 +132,7 @@ script costs a full ~40-minute CI build.
   matching `tmpfiles.d` entry triggers the `var-tmpfiles` lint warning, and
   anything you put there is only applied on *initial provisioning* — later
   upgrades will not see it. Create runtime state with `tmpfiles.d` (see
-  `usr/lib/tmpfiles.d/nix.conf`, `noctalia-greeter-state.conf`) or a oneshot
+  `usr/lib/tmpfiles.d/zz-halcyon-nix.conf`, `noctalia-greeter-state.conf`) or a oneshot
   unit (see `var-nix.service`).
 - `/var/run` must remain a symlink to `/run` — that lint is a hard failure.
 - `/boot` must be empty; the kernel lives in `/usr/lib/modules/<kver>/`.
@@ -205,29 +205,30 @@ that is the build-time smoke test.
 
 ## 7. Known traps (read before touching these areas)
 
+- **The `ctx` stage is FLAT.** `COPY build_files /` puts helpers at
+  `/ctx/<name>` (e.g. `/ctx/install-packages`, `/ctx/libdnf5.conf.d/…`) —
+  **not** `/ctx/build_files/<name>`. A nested path fails with
+  `install: cannot stat`.
+- **`rpm -q` is case-sensitive** while dnf is not: the Fedora package is
+  `Thunar` (capital T) — `dnf install thunar` succeeds and `rpm -q thunar`
+  fails. Query gates with the exact upstream name.
+- **`just --list` does not parse recipe bodies.** Recipe-body syntax is
+  covered by `just check` (bash -n) — extend that check, don't trust
+  `--list`, and run `just --show <recipe>` when editing a recipe.
 - **Verify gates must match what `systemctl enable` actually does.**
   `systemctl enable foo` in a container writes
   `/etc/systemd/system/<target>.wants/foo`, **not** `/usr/lib/systemd/...`.
   Gate with `systemctl is-enabled`, or test the `/etc` path.
 - **`install-pyprland`**: upstream *does* ship `systemd-unit/pyprland.service`,
-  so the `else` branch never runs. Anything that must apply to both the upstream
-  and inline unit (the `ConditionEnvironment` drop-in) has to live **outside**
-  that `if`.
+  so the `else` branch (inline unit) never runs. Anything that must apply to
+  both paths (the `ConditionEnvironment` drop-in) lives **outside** that `if`.
 - **`ConditionEnvironment=` on a user unit** reads the *systemd user manager's*
   environment. It only works if the session exports `XDG_CURRENT_DESKTOP` into
   it (`dbus-update-activation-environment --systemd` / `systemctl --user
   import-environment`). Verify in the Hyprland config, not just in the unit.
-- **Signing**: `halcyon-rebase.just` advertises
-  `ostree-image-signed:docker://…`, which requires `cosign.pub` **inside the
-  image** plus a matching `/etc/containers/policy.json` entry and a
-  `registries.d` sigstore config. Shipping `cosign.pub` only at the repo root is
-  not enough.
-- **`build_files/libdnf5.conf.d/99-halcyon-retries.conf`** only takes effect if
-  something copies it to `/etc/dnf/libdnf5.conf.d/` early in the build. It is
-  not installed by the Containerfile as-is.
-- **`/usr/share/ublue-os/image-info.json`** is consumed by `bazzite-steam`,
-  `bazzite-steam-firstrun` and `83-halcyon-audio.just`. Nothing in this repo
-  generates it — generate it in `image-info` if you rely on those.
+- **Signing**: `ostree-image-signed:docker://…` verification requires the
+  pubkey **inside the image** plus matching `policy.json`/`registries.d`
+  entries — `image-info` ships all three; keep them in sync.
 - **The removals machinery is largely inherited from the Bazzite-fork era.**
   `guarded-removals`, `file-footprint`, `gnome-extensions` and `fonts-cleanup`
   mostly no-op on a bare `fedora-bootc` base and several of their comments
