@@ -58,7 +58,11 @@ jobs:
           DATE_TAG=$(date +%Y%m%d)
           SHA_TAG=$(git rev-parse --short HEAD)
           IMAGE=ghcr.io/${{ github.repository_owner }}/halcyon
+          # OCI labels consume IMAGE_VERSION (<fedora>.<yyyymmdd>, bazzite
+          # convention) and SOURCE_SHA (git revision) via Containerfile ARGs
           podman build --pull --platform linux/amd64 \
+            --build-arg IMAGE_VERSION=44.${DATE_TAG} \
+            --build-arg SOURCE_SHA=$(git rev-parse HEAD) \
             -t ${IMAGE}:latest -t ${IMAGE}:${DATE_TAG} \
             -t ${IMAGE}:44 -t ${IMAGE}:${DATE_TAG}-44 -t ${IMAGE}:${SHA_TAG}-44 .
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -68,7 +72,7 @@ jobs:
       # Distinctive package-count report: run the freshly built image and
       # write the census into the run summary (GITHUB_STEP_SUMMARY) plus a
       # ::notice:: annotation. The census is also baked into the image at
-      # /usr/share/halcyon/package-count by build.d/90-verify.sh.
+      # /usr/share/halcyon/package-count by build_files/final-verify.
       - name: Package count report
         run: |
           set -euo pipefail

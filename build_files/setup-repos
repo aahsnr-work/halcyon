@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# halcyon build stage 1 — base external repos.
+# halcyon build step — setup-repos (RPM Fusion NVIDIA-excluded + negativo17)
 #
 # Repo lifecycle policy (bazzite pattern + TODO "remove non-fedora repos
 # after use"): third-party repos are enabled ONLY inside the stage that
@@ -16,13 +16,17 @@
 # COPRs and vendor repos (lionheartp, sneexy, ublue-os/packages, catpieleaf,
 # terra, vscode, brave) are handled per-use in their own stages.
 set -euo pipefail
-echo "::group::01-repos — base external repos"
-dnf5 -y install dnf5-plugins
+echo "::group::setup-repos — base external repos"
+dnf5 -y --setopt=install_weak_deps=False install \
+  dnf5-plugins
 # RPM Fusion (keys ship in the release RPMs; --nogpgcheck per RPM Fusion practice)
-dnf5 -y --nogpgcheck install \
+dnf5 -y --setopt=install_weak_deps=False --nogpgcheck install \
   "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
   "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
-dnf5 -y install rpmfusion-free-appstream-data rpmfusion-nonfree-appstream-data || true
+dnf5 -y --setopt=install_weak_deps=False install \
+  rpmfusion-free-appstream-data \
+  rpmfusion-nonfree-appstream-data \
+  || true
 # NVIDIA exclusion on every RPM Fusion repo file (akmods partition)
 for f in /etc/yum.repos.d/rpmfusion-*.repo; do
   grep -q '^excludepkgs=' "${f}" || \

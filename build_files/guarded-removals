@@ -85,22 +85,11 @@ for p in gnome-shell gdm mutter waydroid firefox inputplumber \
 done
 echo "::endgroup::"
 
-echo "::group::guarded-removals — hard-fail verification (keepers)"
-echo "--- Packages that must survive ---"
-# NOTE: xwiimote-ng is deliberately absent here — it is not in Fedora/Terra or
-# any enabled COPR on the fedora-bootc base (MIGRATION §5.1 defers it to a
-# halcyon-packages monorepo import); it re-joins this list when that lands.
-for p in bazaar bazzite-portal steam gamescope umu-launcher lutris \
-  scx-scheds scx-tools usbip input-remapper; do
-  if rpm -q "$p" >/dev/null 2>&1; then
-    ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")
-    echo "  PASS  ${p}-${ver} present (keeper)"
-  else
-    echo "  FAIL  keeper ${p} missing after removals — cascade regression?" >&2
-    rc=1
-  fi
-done
-echo "::endgroup::"
+# NOTE: keeper verification (steam/gamescope/scx/umu/bazaar/lutris/…) moved
+# to 90-verify.sh — it must gate the FINAL state, and this script now runs
+# FIRST (03-prune) before anything is installed, so keepers cannot be checked
+# here (main's removals.yml ordering; keeper hard-fails were only meaningful
+# when the Bazzite base pre-installed the gaming stack).
 
 # --- Soft checks (known stable-channel base variance, NOTES.md §5) ---
 echo "::group::guarded-removals — soft checks (base-image variance)"

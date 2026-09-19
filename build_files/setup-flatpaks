@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# halcyon build step — setup-flatpaks (flathub USER repo only)
+# repo only (no flathub system repo, no fedora flatpaks — user policy).
+# First-login behavior mirrors the blue-build default-flatpaks module
+# (github.com/blue-build/modules, modules/default-flatpaks): remove the
+# Fedora flatpak remote and any fedora-origin apps/runtimes, configure
+# Flathub with remote-add --if-not-exists + remote-modify --enable, install
+# with --noninteractive, and notify. The four transition apps install
+# per-user at first login (MIGRATION §8.1: they become monorepo RPMs later;
+# flatpak state lives in /var/home anyway).
+set -euo pipefail
+echo "::group::setup-flatpaks — flatpak package + user-repo wiring"
+# flatpak-selinux is REQUIRED under enforcing SELinux and was previously
+# pulled as a weak dep — with weak deps off everywhere it must be explicit
+dnf5 -y --setopt=install_weak_deps=False install \
+  flatpak \
+  flatpak-selinux
+# libnotify provides notify-send for the module-style install notifications
+dnf5 -y --setopt=install_weak_deps=False install \
+  libnotify
+
+# --- build-time hygiene: the image must ship NO flatpak remotes at all ---
+# (default-flatpaks practice: fedora remote removal via remote-delete; plus
+# drop fedora-workstation-repositories which ships the fedora-flatpak remote)
+flatpak remote-delete --system fedora --force 2>/dev/null || true
+flatpak remote-delete --system fedora-testing --force 2>/dev/null || true
+rm -rf /etc/flatpak/remotes.d /var/lib/flatpak /etc/flatpak/removes.d 2>/dev/null || true
+if rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
+  dnf5 -y remove fedora-workstation-repositories
+fi
+
+mkdir -p /usr/libexec/halcyon-image
+cat > /usr/libexec/halcyon-image/flatpak-setup <<'SCRIPT'
+#!/usr/bin/env bash
+# halcyon per-user flatpak setup — default-flatpaks (v2) module practices,
+# restricted to USER scope and Flathub as the ONLY remote.
+set -euo pipefail
+
+# --- 1. Fedora flatpak remotes must not exist (module: remote-delete --force)
+flatpak remote-delete --user fedora --force 2>/dev/null || true
+flatpak remote-delete --user fedora-testing --force 2>/dev/null || true
+command -v fedora-third-party >/dev/null 2>&1 && fedora-third-party disable || true
+
+# remove any apps/runtimes that originate from the fedora remote (module
+# practice; none exist on a fresh $HOME but this is defensive)
+while read -r app; do
+  [ -n "${app}" ] || continue
+  flatpak remove --user --noninteractive --delete-data "${app}" 2>/dev/null || true
+done < <(flatpak list --user --app --columns=application,origin 2>/dev/null \
+  | awk -F'\t' '$2 ~ /fedora/ {print $1}')
+
+# --- 2. Flathub is the ONLY remote (user scope) ---
+flatpak remote-add --user --if-not-exists flathub \
+  https://dl.flathub.org/repo/flathub.flatpakrepo \
+  --title=Flathub
+flatpak remote-modify --user --enable flathub
+
+# --- 3. remove-list support (default-flatpaks 'remove:' config equivalent);
+# populate below if an app ever needs explicit removal ---
+REMOVE_FLATPAKS=(
+  # org.example.UnwantedApp
+)
+
+# --- 4. install the transition apps (module: --noninteractive, or-update) ---
+notify-send "halcyon" "Installing user flatpaks from Flathub…" 2>/dev/null || true
+for app in "${REMOVE_FLATPAKS[@]}"; do
+  flatpak remove --user --noninteractive --delete-data "${app}" 2>/dev/null || true
+done
+flatpak install --user --noninteractive --or-update flathub \
+  com.ranfdev.DistroShelf \
+  org.onlyoffice.desktopeditors \
+  com.bitwarden.desktop \
+  com.ticktick.TickTick
+notify-send "halcyon" "User flatpak installation finished." 2>/dev/null || true
+
+# --- 5. final state check: flathub must be the only user remote ---
+remotes="$(flatpak remotes --user --show-disabled 2>/dev/null | awk 'NF && $1 != "Name" {print $1}' | grep -v '^flathub$' || true)"
+if [ -n "${remotes}" ]; then
+  echo "  FAIL  unexpected user flatpak remotes present: ${remotes}"
+  exit 1
+fi
+SCRIPT
+chmod 0755 /usr/libexec/halcyon-image/flatpak-setup
+
+# user unit — wired --global in 50-system.sh; runs once at first login
+cat > /usr/lib/systemd/user/halcyon-flatpak-setup.service <<'UNIT'
+[Unit]
+Description=Install halcyon user flatpaks from flathub (transition until RPM conversion)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!%h/.config/halcyon/.flatpak-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/halcyon-image/flatpak-setup
+ExecStartPost=/bin/sh -c 'mkdir -p %h/.config/halcyon && touch %h/.config/halcyon/.flatpak-done'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
+UNIT
+echo "::endgroup::"

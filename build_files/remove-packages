@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# halcyon build step — remove-packages (removals FIRST, main's removals.yml ordering)
+#
+# Removals run against the PRISTINE base before anything is installed:
+# dnf computes the removal set from the full Requires graph (file requires,
+# rich deps, per-subpackage edges — Fedora splits units into many subpackages
+# so name-level reasoning cannot bound the transaction), and autoremove reads
+# install-reason state that is least trustworthy late in a build. On the
+# untouched base the blast radius is smallest and any cascade that hits core
+# tooling fails the build at the very next dnf call — loud, immediate.
+# Everything halcyon needs is (re)installed explicitly by later stages.
+#
+# Structure mirrors main's removals.yml:
+#   Step B — remove proven-present packages (full main list + the bootc-era
+#            nano/zram trio), each guarded by rpm -q
+#   Step C — guarded-removals.sh (candidates + reverse-dep gates + must-be-
+#            gone verification; keeper verification lives in 90-verify.sh
+#            against the FINAL state)
+#   Step D — file-footprint.sh (bazzite/waydroid file residue)
+#   Step E — gnome-extensions.sh (extension dirs + gschema overrides)
+#   Step F — fonts-cleanup.sh (unprotected, unreferenced font RPMs)
+set -euo pipefail
+echo "::group::remove-packages — Step B: proven-present removals (main removals.yml list)"
+REMOVAL_CANDIDATES=(
+  # Bazzite/GNOME set from main's removals.yml Step B
+  nautilus-gsconnect
+  gnome-shell-extension-gsconnect
+  gnome-shell-extension-user-theme
+  gnome-search-yafti
+  gnome-rounded-blur
+  firewall-config
+  ibus-mozc
+  ibus-pinyin
+  ibus-table-chinese-cangjie
+  ibus-table-chinese-quick
+  inputplumber
+  steamos-manager-powerstation
+  jupiter-fan-control
+  jupiter-hw-support-btrfs
+  galileo-mura
+  steamdeck-dsp
+  powerbuttond
+  vpower
+  sdgyrodsu
+  hid-replay
+  steamdeck-backgrounds
+  steamdeck-gnome-presets
+  waydroid
+  fastfetch
+  firefox
+  firefox-langpacks
+  gnome-shell
+  mutter
+  gdm
+  gnome-session
+  gnome-session-wayland-session
+  nautilus
+  ptyxis
+  gnome-control-center
+  gnome-settings-daemon
+  gjs
+  xdg-desktop-portal-gnome
+  # bootc-era trim (halcyon manages swap + editors itself)
+  nano
+  nano-default-editor
+  zram-generator-defaults
+)
+PRESENT=()
+for pkg in "${REMOVAL_CANDIDATES[@]}"; do
+  rpm -q "${pkg}" >/dev/null 2>&1 && PRESENT+=("${pkg}")
+done
+if [ "${#PRESENT[@]}" -gt 0 ]; then
+  echo "  INFO  removing ${#PRESENT[@]} present package(s): ${PRESENT[*]}"
+  # --no-autoremove here: the base orphan sweep below is the only autoremove
+  dnf5 -y remove --no-autoremove "${PRESENT[@]}"
+else
+  echo "  INFO  nothing from the removal list is installed (clean base)"
+fi
+# base orphan sweep — smallest graph the build will ever see
+dnf5 -y autoremove || true
+echo "::endgroup::"
+
+echo "::group::remove-packages — Step C/D/E/F: guarded removals + footprint (existing scripts)"
+bash /ctx/guarded-removals
+bash /ctx/file-footprint
+bash /ctx/gnome-extensions
+bash /ctx/fonts-cleanup
+echo "::endgroup::"

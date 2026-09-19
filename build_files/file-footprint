@@ -248,11 +248,11 @@ fi
 echo "::endgroup::"
 
 echo "::group::file-footprint — default shell fix"
-echo "--- Ensuring SHELL=/bin/bash in /etc/default/useradd ---"
-if grep -q '^SHELL=/bin/bash' /etc/default/useradd; then
-  echo "  OK    SHELL already set to /bin/bash"
+echo "--- Ensuring SHELL=/bin/zsh in /etc/default/useradd (halcyon default shell) ---"
+if grep -q '^SHELL=/bin/zsh' /etc/default/useradd; then
+  echo "  OK    SHELL already set to /bin/zsh"
 else
-  sed -i 's|^SHELL=.*|SHELL=/bin/bash|' /etc/default/useradd
+  sed -i 's|^SHELL=.*|SHELL=/bin/zsh|' /etc/default/useradd
   new_val=$(grep '^SHELL=' /etc/default/useradd)
   echo "  PATCHED  /etc/default/useradd → ${new_val}"
 fi

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# halcyon build stage 10 — systemd units, services, tmpfiles, chezmoi wiring.
+# halcyon build step — configure-system (units, services, chezmoi wiring)
 # (ujust machinery + pyprland unit + flatpak user unit are wired in their own
 # stages; brew units are retired with brew — MIGRATION §8.7.)
 set -euo pipefail
-echo "::group::50-system — units + services"
-# systemd units shipped in files/systemd/{system,user}
-cp -r /ctx/files/systemd/system/. /usr/lib/systemd/system/ 2>/dev/null || true
-cp -r /ctx/files/systemd/user/. /usr/lib/systemd/user/ 2>/dev/null || true
+echo "::group::configure-system — units + services"
+# systemd units ship via the system_files overlay (usr/lib/systemd);
+# this stage wires enablement only
 # system services: greetd (+ tty2 escape hatch), nix (winter pattern: the
 # /nix bind mount over the /var/nix store root)
 systemctl enable greetd.service getty@tty2.service 2>/dev/null || true
