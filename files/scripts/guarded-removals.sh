@@ -90,7 +90,7 @@ echo "--- Packages that must survive ---"
 # NOTE: xwiimote-ng is deliberately absent here — it is not in Fedora/Terra or
 # any enabled COPR on the fedora-bootc base (MIGRATION §5.1 defers it to a
 # halcyon-packages monorepo import); it re-joins this list when that lands.
-for p in bazaar bazzite-portal steam terra-gamescope umu-launcher lutris \
+for p in bazaar bazzite-portal steam gamescope umu-launcher lutris \
   scx-scheds scx-tools usbip input-remapper; do
   if rpm -q "$p" >/dev/null 2>&1; then
     ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")

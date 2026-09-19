@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodically update halcyon dotfiles via chezmoi
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

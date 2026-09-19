@@ -1,6 +1,6 @@
 # MIGRATION.md — halcyon rebuild: bootc Containerfile + p03 kernel + RPM monorepo
 
-**Status:** plan — **Stage K1 executed (2026-09-19)**: the COPR CDN recovered (repodata now served via the Pulp/`packages.redhat.com` redirect chain, verified live), and the `container` branch builds the documented target — `quay.io/fedora/fedora-bootc:44` + p03 kernel + `kernel-p03-nvidia-open` from COPR `catpieleaf/kernel-p03`, NVIDIA userland from **negativo17** (same 615.71.09 driver line; install mechanics per rakuos-base: `tsflags=noscripts`, explicit `depmod`+`dracut`). The interim Bazzite-base build (ublue akmods pattern) is retired. Remaining: monorepo stand-up (§6), COPR→monorepo flips (§11.1 steps 3–4). — replaces the former `ANDAMAN-MIGRATION.md`.
+**Status:** plan — **Stage K1 executed (2026-09-19)**; the `container` branch now builds `quay.io/fedora/fedora-bootc:44` + p03 kernel + `kernel-p03-nvidia-open` (COPR `catpieleaf/kernel-p03`), NVIDIA userland from **negativo17** (615.71.09 line; install mechanics per rakuos-base: `tsflags=noscripts`, explicit `depmod`+`dracut`), **Containerfile best practices** (ctx scratch stage — build scripts never baked in; OCI labels; `/ctx/build.d/cleanup` after every RUN; `.containerignore`), **main-branch parity restored** (ujust/uupd via ublue-os-just — D9; nix winter pattern — D12; chezmoi Fedora RPM — D13; fonts via dnf — D14; brew fully purged; zsh default shell), and the **repo lifecycle policy** (D10) with `11-terra.sh` as the user-editable Terra package list (D15). Remaining: monorepo stand-up (§6), COPR→monorepo flips (§11.1 steps 3–4). — replaces the former `ANDAMAN-MIGRATION.md`.
 **Date:** 2026-09-19 · **Target Fedora:** 44 · **Plan iterations:** 5 (three required + two verification passes; logged in §1.3)
 
 ---
@@ -34,6 +34,13 @@
 | D6 | brave/vscode: **stay on vendor repos** | Determination in §6.6. |
 | D7 | TeX Live: **Arch-style grouped RPMs from dated tlnet-archive snapshots**, monthly/3-weekly cadence | Verified design in §7.3. |
 | D8 | BlueBuild removal: recipes/ + blue-build action replaced by **Containerfile + plain workflows** | User directive. |
+| D9 | ujust/uupd machinery: **`ublue-os-just` + `uupd` + `ublue-os-update-services` from COPR `ublue-os/packages`** replace "machinery from the Bazzite base"; custom modules register through the justfile's `import? 60-custom.just` hook; curated bazzite recipe files vendored into `/usr/share/ublue-os/just/` | Verified live 2026-09-19: the COPR serves both packages for f44; `rpm -ql ublue-os-just` ships `/usr/bin/ujust`, `/usr/lib/ujust/ujust.sh`, the base modules (`00-default`, `10-update` uupd-based, `20-clean`, `30-distrobox`, `40-nvidia`, …) and `justfile` — `10-update.just` and `justfile` are **rpm-owned**, so we must NOT vendor them (conflict); `ujust --list` validated. |
+| D10 | Repo lifecycle (bazzite pattern + TODO "remove non-fedora repos after use"): **enable per-stage → disable immediately after → 80-finalize.sh deletes every third-party repo file** (COPRs, terra, vscode, brave, negativo17, RPM Fusion). The shipped image carries only Fedora repos; updates arrive via image rebuilds. NVIDIA partition per ublue-os/akmods: NVIDIA packages are **excluded from all RPM Fusion repos** (they come from negativo17 only) so the solver can never mix the conflicting chains. | User directive; bazzite's Containerfile disables COPRs after each RUN and removes repo files at finalize. |
+| D11 | Flatpak: package RPM installed at build; **flathub USER repo only** at first login (no flathub system repo, no fedora flatpaks — `fedora-workstation-repositories` removed if present); the four transition apps install per-user via `halcyon-flatpak-setup.service` (user unit, `--global` enabled) | User directive (gaming/apps go native RPM per rakuOS; flatpak is transitional only — MIGRATION §8.1). |
+| D12 | nix setup = **the winter pattern verbatim** (fu5ha/winter `recipes/modules/nix.yaml`: `nix` + `nix-daemon` RPMs, `var-nix.service` + `nix.mount`, tmpfiles + HOME-resolution profile script) — main's nix.yml already WAS this pattern | Verified: winter's files are identical to main's `files/nix-*`; nothing to trim. |
+| D13 | chezmoi from the **official Fedora repo** (2.72 in F44), wired exactly like main's BlueBuild chezmoi module: `chezmoi-init.service` + `chezmoi-update.service`/`.timer` in `/usr/lib/systemd/user/`, `--global` enablement symlinks in `/etc/systemd/user/{default,timers}.target.wants/` | User directive. |
+| D14 | Fonts (main fonts.yml parity) via **dnf only**: Terra `jetbrainsmono-nerd-fonts` + `nerdfontssymbolsonly-nerd-fonts`; Fedora `jetbrains-mono-fonts`, `google-noto-emoji-fonts`, `google-noto-color-emoji-fonts`, `liberation-fonts`. No GitHub tarball downloads. | User directive; Terra package names verified live 2026-09-19. |
+| D15 | Terra packages live in **`build.d/11-terra.sh`** (user-editable list), enabled only for that stage. `terra-gamescope`/`terra-mangohud` **no longer exist in Terra** (verified live 2026-09-19) — Fedora provides `gamescope`/`mangohud`(+`.i686`); keeper list updated accordingly. zsh is the default shell (`/etc/default/useradd SHELL=/bin/zsh`). | User directive; live metadata check. |
 
 **Plan iterations:** v1 (architecture draft — rejected, insufficient coverage) → v2 (gap-fill: gaming-stack sourcing, TeX Live Arch split, anda/rpmautospec verification) → v3 (five-stage doc structure + template set) → v4 (base-comparison verification against Bazzite's Containerfile and Fedora bootc GitLab) → v5 (final, approved).
 
@@ -323,12 +330,12 @@ Formula removal also **retires the entire brew pipeline**: `install-brew-bundle.
 | core.yml (dnf install list) | `02-packages.sh` | same package list, minus COPR-hosted bits |
 | desktop.yml (COPR + verify) | `20-desktop.sh` + gates in `90-verify.sh` | COPR → halcyon-packages (§8.4) |
 | apps.yml | `21-apps.sh` | vscode/brave vendor repos; zed (Terra) unchanged; zen → monorepo |
-| fonts.yml | `30-fonts.sh` | nerd fonts + google fonts as today |
-| flatpaks.yml | **removed** | replaced by §8.1 RPMs; no Flatpak stack |
-| nix.yml | `31-nix.sh` + files tree | var-nix.service, nix.mount, tmpfiles, profile hook unchanged |
-| brew.yml + brew services | **removed** | replaced by §8.7 RPMs |
+| fonts.yml | `10-packages.sh` (Fedora fonts) + `11-terra.sh` (Terra nerd fonts) | nerd fonts now RPMs from Terra (D14); no tarball downloads |
+| flatpaks.yml | `21-flatpak-setup.sh` + user unit | flathub USER repo only (D11); no system flathub, no fedora flatpaks |
+| nix.yml | `32-nix.sh` + files tree | winter pattern (D12): nix + nix-daemon, var-nix.service, nix.mount, tmpfiles, profile hook |
+| brew.yml + brew services | **removed** | replaced by §8.7 RPMs; zero brew traces remain |
 | build-scripts.yml (obsidian/zotero/pyprland/texlive/python) | `40-*.sh` during transition → **retired** as monorepo RPMs land | texlive keeps the snapshot logic inside the monorepo build instead |
-| files.yml (system tree, justfiles, chezmoi) | `COPY system/ /` + `50-*.sh` | unchanged content, same layout |
+| files.yml (system tree, justfiles, chezmoi) | `COPY files/system/ /` + `50-system.sh` (units/chezmoi wiring) + `50-ujust.sh` (ujust via `ublue-os-just`, modules registered through the `60-custom.just` hook — D9) | chezmoi from Fedora RPM (D13); justfiles moved from /usr/share/bluebuild/justfiles to /usr/share/ublue-os/just/ |
 | services.yml | `50-system.sh` (`systemctl enable` equivalents) | unchanged list minus brew units |
 | branding.yml (plymouth assets, motd, os-release) | `60-branding.sh` | asset-generation logic carried over |
 | initramfs module | `dracut -f` inside the kernel stage (§4.2) | explicit in the Containerfile |

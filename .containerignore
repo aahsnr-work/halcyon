@@ -1,0 +1,18 @@
+# Content excluded from the build context — nothing here is needed by any
+# build stage; keeping it out shrinks upload/transfer and prevents leaks.
+.git
+.github
+.vscode
+.idea
+.zcode
+.bluebuild-scripts_*
+MIGRATION.md
+TODO.md
+README.md
+cosign.pub
+recipes/
+*.log
+*.tar
+*.tar.gz
+*.oci
+*.iso

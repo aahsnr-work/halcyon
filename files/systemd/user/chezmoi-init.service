@@ -1,0 +1,13 @@
+[Unit]
+Description=Apply halcyon dotfiles via chezmoi (first login)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!%h/.local/share/chezmoi
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/chezmoi init --apply aahsnr-configs/dotfiles
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target

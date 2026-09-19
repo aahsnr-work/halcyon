@@ -17,7 +17,7 @@ export TERMINAL="kitty"
 export BROWSER="brave-browser" # Brave RPM ships /usr/bin/brave-browser, not brave
 export EDITOR="nvim"
 export VISUAL="emacsclient -c -a emacs"
-# bat comes from the brew payload; fall back to less if it has not seeded yet
+# bat is an RPM (40-devtools.sh); fall back to less if it is ever absent
 if command -v bat >/dev/null 2>&1; then
   export PAGER="bat --paging=always --style=plain"
 else

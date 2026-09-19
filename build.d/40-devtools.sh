@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# halcyon build stage 4 — devtools: Fedora-available former-brew formulas
-# (the rest land via halcyon-packages; brew pipeline retired — MIGRATION §8.7)
+# halcyon build stage 6 — devtools: the former 22-formula brew Brewfile as
+# Fedora RPMs (MIGRATION §8.7; the rest land via halcyon-packages later).
+# chezmoi comes from the official Fedora repo (2.72 in F44).
 set -euo pipefail
-echo "::group::40-devtools — Fedora brew-formula replacements + build base"
-dnf5 -y install atuin bat btop cava chafa direnv eza fzf gnuplot ripgrep \
-  tealdeer uv fd-find gcc perl jq python3
-# chezmoi (not in Fedora) — pinned upstream binary
-CZ_VER="$(curl -fsSL https://api.github.com/repos/twpayne/chezmoi/releases/latest | jq -r .tag_name | tr -d v)"
-curl -fsSL --retry 5 "https://github.com/twpayne/chezmoi/releases/download/v${CZ_VER}/chezmoi_${CZ_VER}_linux_amd64.tar.gz" \
-  | tar -xz -C /usr/local/bin chezmoi
-chmod 0755 /usr/local/bin/chezmoi
+echo "::group::40-devtools — brew-formula replacements (Fedora RPMs)"
+dnf5 -y install \
+  atuin bat btop cava chafa direnv dust eza fd-find fzf gnuplot \
+  lazygit pandoc ripgrep starship tealdeer uv yazi zellij \
+  chezmoi \
+  gcc perl jq python3
 echo "::endgroup::"
+
+# ---------------------------------------------------------------------------
+# TODO(user): bun, pixi, opencode publish no Fedora RPMs — add their
+# upstream-binary wrapper installs HERE (monorepo type-B specs replace this
+# later). Pattern: resolve the latest release via the GitHub API, download
+# with --retry, verify the sha256 the release publishes, install to
+# /usr/local/bin. Upstreams:
+#   bun      https://github.com/oven-sh/bun/releases
+#   pixi     https://github.com/prefix-dev/pixi/releases
+#   opencode https://github.com/sst/opencode/releases
+# ---------------------------------------------------------------------------

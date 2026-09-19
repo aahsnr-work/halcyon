@@ -43,8 +43,11 @@ fi
 rm -rf /boot/* /usr/lib/modules/* /lib/modules/*
 
 # --- p03 kernel + prebuilt nvidia-open modules (x86-64-v3 builds; the -gcc
-# v2 fallback and kernel-p03-gcc-nvidia-open exist in the same COPR)
+# v2 fallback and kernel-p03-gcc-nvidia-open exist in the same COPR).
+# Repo lifecycle: enable only for this transaction, disable immediately.
+dnf5 -y copr enable -y catpieleaf/kernel-p03
 dnf5 -y --setopt=tsflags=noscripts install kernel-p03 kernel-p03-nvidia-open
+dnf5 -y copr disable -y catpieleaf/kernel-p03
 
 # --- NVIDIA userland from negativo17 (clean leaf packages only — see header).
 # 32-bit libs for Steam/Proton, CUDA libs for NVENC/DLSS, VA-API bridge.

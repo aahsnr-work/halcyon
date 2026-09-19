@@ -22,8 +22,8 @@ fi
 dnf5 -y autoremove || true
 echo "::endgroup::"
 echo "::group::30-prune — guarded removals + footprint (existing scripts)"
-bash /tmp/build.d/scripts/guarded-removals.sh
-bash /tmp/build.d/scripts/file-footprint.sh
-bash /tmp/build.d/scripts/gnome-extensions.sh
-bash /tmp/build.d/scripts/fonts-cleanup.sh
+bash /ctx/files/scripts/guarded-removals.sh
+bash /ctx/files/scripts/file-footprint.sh
+bash /ctx/files/scripts/gnome-extensions.sh
+bash /ctx/files/scripts/fonts-cleanup.sh
 echo "::endgroup::"

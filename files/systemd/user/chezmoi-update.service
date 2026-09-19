@@ -1,0 +1,10 @@
+[Unit]
+Description=Update halcyon dotfiles via chezmoi
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/.local/share/chezmoi
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/chezmoi update
+TimeoutStartSec=600

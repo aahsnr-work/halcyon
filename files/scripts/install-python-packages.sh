@@ -95,26 +95,19 @@ echo "::group::install-python-packages — smoke tests"
 dump_version="$(dump-to-markdown --version)"
 echo "  OK    dump-to-markdown ${dump_version}"
 
-# Some tools need fd/bat/rg/fzf from the baked brew payload (not on the
-# build container's PATH); the rest are dependency-free. Run each binary
-# plain first, then retry failures with the payload bin on PATH — a binary
-# that still fails has a real problem. This keeps the smoke correct no
-# matter which tools land where in the future.
-seed_tmp="$(mktemp -d)"
-tar --zstd -xf /usr/share/halcyon/brew-bundle.tar.zst -C "${seed_tmp}" home/linuxbrew/.linuxbrew/bin
+# Some tools need fd/bat/rg/fzf at runtime — these are RPMs installed by
+# 40-devtools.sh (the brew payload is retired, MIGRATION §8.7), so the plain
+# PATH is enough. Run each binary and fail the build on a real problem.
 failed=()
 for pkg in fconf fe ff fkill fp fssh rmi rmtmp screenshot se; do
   if "/usr/bin/${pkg}" -h >/dev/null 2>&1 || "/usr/bin/${pkg}" --version >/dev/null 2>&1; then
     echo "  OK    ${pkg} smoke"
-  elif PATH="${seed_tmp}/home/linuxbrew/.linuxbrew/bin:${PATH}" "/usr/bin/${pkg}" -h >/dev/null 2>&1 || PATH="${seed_tmp}/home/linuxbrew/.linuxbrew/bin:${PATH}" "/usr/bin/${pkg}" --version >/dev/null 2>&1; then
-    echo "  OK    ${pkg} smoke (payload tools on PATH)"
   else
     failed+=("${pkg}")
   fi
 done
-rm -rf "${seed_tmp}"
 if [ "${#failed[@]}" -gt 0 ]; then
-  echo "  FAIL  ${failed[*]} — -h/--version failed even with payload tools on PATH"
+  echo "  FAIL  ${failed[*]} — -h/--version failed"
   echo "::endgroup::"
   exit 1
 fi
