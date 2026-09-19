@@ -46,7 +46,7 @@ COPY system_files/shared/ /
 # Copr 504s during the very stages that follow (libdnf5 reads
 # /etc/dnf/libdnf5.conf.d/ before the main config).
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    install -Dm0644 /ctx/build_files/libdnf5.conf.d/99-halcyon-retries.conf \
+    install -Dm0644 /ctx/libdnf5.conf.d/99-halcyon-retries.conf \
       /etc/dnf/libdnf5.conf.d/99-halcyon-retries.conf
 
 # ---- Stage 1: removals FIRST — pristine-base blast radius (main ordering) --
