@@ -11,5 +11,43 @@ else
   echo 'HOME_URL=https://github.com/aahsnr-work/halcyon' >> /usr/lib/os-release
 fi
 # plymouth theme assets are generated from the baked astronaut wallpaper
-bash /ctx/build-plymouth-assets
+/ctx/build-plymouth-assets
+echo "::endgroup::"
+
+echo "::group::image-info — image-info.json + sigstore policy assets"
+# bazzite-steam / bazzite-steam-firstrun / 83-halcyon-audio read this file
+install -d /usr/share/ublue-os
+cat >/usr/share/ublue-os/image-info.json <<EOF
+{ "image-name": "halcyon",
+  "image-vendor": "aahsnr-work",
+  "image-ref": "ostree-image-signed:docker://ghcr.io/aahsnr-work/halcyon",
+  "image-tag": "latest",
+  "base-image-name": "fedora-bootc",
+  "fedora-version": "$(rpm -E %fedora)" }
+EOF
+chmod 0644 /usr/share/ublue-os/image-info.json
+
+# Signed-rebase support (ublue-os/config pattern): ship the cosign public
+# key plus a sigstore policy entry so `bootc switch
+# --enforce-container-sigpolicy ostree-image-signed:...` verifies out of the box.
+install -Dm0644 /ctx/cosign.pub /usr/etc/pki/containers/halcyon.pub
+install -d /etc/containers/registries.d
+cat >/etc/containers/registries.d/halcyon.yaml <<'YAML'
+docker:
+  ghcr.io/aahsnr-work/halcyon:
+    use-sigstore-attachments: true
+YAML
+# policy.json: require our sigstore signature for our image path, accept
+# everything else (the bootc default)
+cat >/etc/containers/policy.json <<'POLICY'
+{
+    "default": [{"type": "insecureAcceptAnything"}],
+    "transports": {
+        "docker": {
+            "ghcr.io/aahsnr-work/halcyon": [{"type": "sigstoreSigned", "keyPath": "/usr/etc/pki/containers/halcyon.pub"}]
+        }
+    }
+}
+POLICY
+echo "  OK    image-info.json + halcyon.pub + policy.json + registries.d written"
 echo "::endgroup::"

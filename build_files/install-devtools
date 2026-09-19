@@ -18,7 +18,9 @@ dnf5 -y --setopt=install_weak_deps=False install \
   dust \
   eza \
   fd-find \
+  fpaste \
   fzf \
+  wl-clipboard \
   gnuplot \
   jq \
   pandoc \

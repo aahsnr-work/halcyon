@@ -216,10 +216,8 @@ toggle-i915-sleep-fix ACTION="":
     get_current_status() {
       local karg_status
       local kargs
-      kargs=$(rpm-ostree kargs 2>/dev/null)
-      if [[ -z "$kargs" ]]; then
-        kargs=$(cat /proc/cmdline)
-      fi
+      # bootc: no rpm-ostree — the current cmdline is the source of truth
+      kargs=$(cat /proc/cmdline)
       karg_status=$(grep -o 'i915.enable_dc=[-0-9]' <<< "$kargs" | tail -n1 | cut -d= -f2)
       if [[ -z "$karg_status" ]]; then
         echo "Not Set"
@@ -291,14 +289,10 @@ toggle-i915-sleep-fix ACTION="":
         echo -e "\nInvalid value for i915.enable_dc. Please choose a valid value.\n"
         return
       fi
-      rpm-ostree kargs \
-        --delete-if-present="i915.enable_dc=-1" \
-        --delete-if-present="i915.enable_dc=0" \
-        --delete-if-present="i915.enable_dc=1" \
-        --delete-if-present="i915.enable_dc=2" \
-        --delete-if-present="i915.enable_dc=3" \
-        --delete-if-present="i915.enable_dc=4" \
-        --append-if-missing="i915.enable_dc=$new_value"
+      # bootc: grubby edits kernel args in place (removing the key clears
+      # any of the -1..4 variants, then we append the chosen one)
+      sudo grubby --update-kernel=ALL --remove-args="i915.enable_dc"
+      sudo grubby --update-kernel=ALL --args="i915.enable_dc=${new_value}"
       echo -e "Kernel parameter updated. Reboot required to apply changes."
     }
     # Prompt user for action
@@ -341,13 +335,7 @@ toggle-i915-sleep-fix ACTION="":
         ;;
       "Unset Parameter"|unset)
         echo "Unsetting i915.enable_dc..."
-        rpm-ostree kargs \
-          --delete-if-present="i915.enable_dc=-1" \
-          --delete-if-present="i915.enable_dc=0" \
-          --delete-if-present="i915.enable_dc=1" \
-          --delete-if-present="i915.enable_dc=2" \
-          --delete-if-present="i915.enable_dc=3" \
-          --delete-if-present="i915.enable_dc=4"
+        sudo grubby --update-kernel=ALL --remove-args="i915.enable_dc"
         echo -e "Kernel parameter unset. Reboot required to apply changes."
         ;;
       "Exit without changes")

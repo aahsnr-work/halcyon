@@ -79,7 +79,8 @@ if [[ ! -f "$STEAM_CONFIG" ]] || ! grep -q "$SHADER_THREAD_SETTING" "$STEAM_CONF
   echo "${SHADER_THREAD_SETTING} ${threads}" >> "$STEAM_CONFIG"
 fi
 
-if [[ "$XDG_SESSION_TYPE" == "wayland" ]]; then
+# extest is not part of this image — only preload it when actually present
+if [[ "$XDG_SESSION_TYPE" == "wayland" && -f /usr/lib/extest/libextest.so ]]; then
   # https://github.com/Supreeeme/extest
   # Extest is a drop in replacement for the X11 XTEST extension.
   # It creates a virtual device with the uinput kernel module.

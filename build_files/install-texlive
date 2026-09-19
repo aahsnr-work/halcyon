@@ -44,6 +44,7 @@ for mirror in "${TEXLIVE_MIRRORS[@]}"; do
       "${mirror}/install-tl-unx.tar.gz" -o "${TEXLIVE_TMP}/install-tl-unx.tar.gz"; then
     if gzip -t "${TEXLIVE_TMP}/install-tl-unx.tar.gz" 2>/dev/null; then
       TARBALL="${TEXLIVE_TMP}/install-tl-unx.tar.gz"
+      TL_REPO="${mirror}"
       echo "  OK    downloaded install-tl-unx.tar.gz from ${mirror}"
       break
     fi
@@ -52,7 +53,7 @@ for mirror in "${TEXLIVE_MIRRORS[@]}"; do
     echo "  WARN  download from ${mirror} failed — trying next mirror"
   fi
 done
-if [ -z "${TARBALL}" ]; then
+if [ -z "${TARBALL}" ] || [ -z "${TL_REPO}" ]; then
   echo "  FAIL  Could not download install-tl-unx.tar.gz from any TeX Live mirror" >&2
   echo "::endgroup::"
   exit 1
@@ -84,16 +85,17 @@ tlpdbopt_autobackup 0
 tlpdbopt_install_docfiles 0
 tlpdbopt_install_srcfiles 0
 EOF
-echo "  OK    texlive.profile written (scheme-medium, no docs/src)"
+echo "  OK    texlive.profile written (scheme-small, no docs/src)"
 
 echo "--- Running install-tl (this may take several minutes) ---"
 if "${INSTALLER}" \
   -profile "${TEXLIVE_TMP}/texlive.profile" \
   -no-interaction \
-  -repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet; then
+  -repository "${TL_REPO}"; then
   echo "  OK    install-tl completed successfully"
 else
-  echo "  WARN  install-tl exited non-zero — continuing to verify bin dir" >&2
+  echo "  FAIL  install-tl exited non-zero" >&2
+  exit 1
 fi
 echo "::endgroup::"
 
@@ -109,7 +111,7 @@ echo "  OK    TeX Live bin dir: ${TEXLIVE_BINDIR}"
 if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
   echo "--- Installing extra packages via tlmgr: ${EXTRA_TL_PACKAGES[*]} ---"
   if "${TEXLIVE_BINDIR}/tlmgr" \
-    --repository https://mirrors.mit.edu/CTAN/systems/texlive/tlnet \
+    --repository "${TL_REPO}" \
     install "${EXTRA_TL_PACKAGES[@]}"; then
     echo "  OK    extra packages installed: ${EXTRA_TL_PACKAGES[*]}"
   else

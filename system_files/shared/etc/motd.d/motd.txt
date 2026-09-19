@@ -1,4 +1,8 @@
-halcyon — TODO(user)
+halcyon — Hyprland gaming desktop (fedora-bootc + p03 kernel)
 
-Replace this file with real login-shell motd content (or remove the file and
-ship no motd). Nothing branded is invented for you.
+  ujust              list everything this image can do (update, fixes, tools)
+  ujust update       update system, flatpaks and containers via uupd
+  fastfetch          system overview
+
+Package census of this exact build: /usr/share/halcyon/package-count
+Report issues: https://github.com/aahsnr-work/halcyon

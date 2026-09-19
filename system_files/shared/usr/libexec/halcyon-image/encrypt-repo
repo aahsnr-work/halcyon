@@ -13,6 +13,15 @@
 # License: GPL-3.0
 
 set -euo pipefail
+
+# print_section is defined in git-setup; duplicated here so this
+# script is self-contained
+print_section() {
+    echo ""
+    echo -e "${BOLD}${BLUE}═══ $* ═══${NC}"
+    echo ""
+}
+
 shopt -s nullglob
 
 # =============================================================================
@@ -64,7 +73,7 @@ declare -a TEMP_FILES=()
 cleanup() {
   local exit_code=$?
   for f in "${TEMP_FILES[@]}"; do
-    [[ -f "$f" ]] && rm -f "$f" 2>/dev/null || true
+    if [[ -f "$f" ]]; then rm -f "$f"; elif [[ -d "$f" ]]; then rm -rf "$f"; fi 2>/dev/null || true
   done
   if [[ $exit_code -ne 0 ]]; then
     echo -e "${RED}✗ Script exited with error $exit_code${NC}" >&2

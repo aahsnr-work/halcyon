@@ -11,8 +11,9 @@ gate "nix-daemon package installed"      rpm -q nix-daemon
 gate "var-nix.service unit"              test -f /usr/lib/systemd/system/var-nix.service
 gate "nix.mount unit"                    test -f /usr/lib/systemd/system/nix.mount
 gate "nix tmpfiles (store dirs)"         test -f /usr/lib/tmpfiles.d/nix.conf
+gate "halcyon nix tmpfiles survived"  grep -q "1775 root nixbld" /usr/lib/tmpfiles.d/zz-halcyon-nix.conf
 gate "nix profile HOME-resolution hook"  test -f /etc/profile.d/01-nix-resolve-home-env.sh
-gate "nix-daemon enabled"                test -e /usr/lib/systemd/system/multi-user.target.wants/nix-daemon.service
+gate "nix-daemon enabled"                systemctl is-enabled nix-daemon
 echo "::endgroup::"
 [ "$fail" = 0 ] || { echo "::error::nix-verify failed"; exit 1; }
 echo "--- nix-verify: all checks passed ---"

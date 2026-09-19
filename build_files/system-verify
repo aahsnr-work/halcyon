@@ -8,6 +8,9 @@ gate() { local desc="$1"; shift; if "$@" >/dev/null 2>&1; then echo "  PASS  $de
 echo "::group::system-verify — global user unit wiring"
 gate "chezmoi-init enabled --global"     test -L /etc/systemd/user/default.target.wants/chezmoi-init.service
 gate "chezmoi-update.timer enabled"      test -L /etc/systemd/user/timers.target.wants/chezmoi-update.timer
+gate "greetd enabled"                    systemctl is-enabled greetd.service
+gate "var-nix enabled"                   systemctl is-enabled var-nix.service
+gate "nix.mount enabled"                 systemctl is-enabled nix.mount
 gate "pyprland enabled --global"         test -L /etc/systemd/user/default.target.wants/pyprland.service
 gate "flatpak setup enabled --global"    test -L /etc/systemd/user/default.target.wants/halcyon-flatpak-setup.service
 echo "::endgroup::"

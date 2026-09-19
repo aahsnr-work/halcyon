@@ -45,11 +45,11 @@ rm -rf /boot/* /usr/lib/modules/* /lib/modules/*
 # --- p03 kernel + prebuilt nvidia-open modules (x86-64-v3 builds; the -gcc
 # v2 fallback and kernel-p03-gcc-nvidia-open exist in the same COPR).
 # Repo lifecycle: enable only for this transaction, disable immediately.
-dnf5 -y copr enable -y catpieleaf/kernel-p03
+dnf5 -y copr enable catpieleaf/kernel-p03
 dnf5 -y --setopt=tsflags=noscripts --setopt=install_weak_deps=False install \
   kernel-p03 \
   kernel-p03-nvidia-open
-dnf5 -y copr disable -y catpieleaf/kernel-p03
+dnf5 -y copr disable catpieleaf/kernel-p03
 
 # --- NVIDIA userland from negativo17 (clean leaf packages only — see header).
 # 32-bit libs for Steam/Proton, CUDA libs for NVENC/DLSS, VA-API bridge.
@@ -107,6 +107,10 @@ grep -q '^CONFIG_SECURITY_SELINUX=y' "/usr/lib/modules/${KVER}/config" || {
 # theme exist (rakuos-base generates its initramfs last for the same reason —
 # the BlueBuild build did it with an initramfs module after branding.yml).
 depmod "${KVER}"
+
+# repo lifecycle: the NVIDIA userland is complete — disable negativo17 so no
+# later stage can silently pull from it (finalize removes the file entirely)
+sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/fedora-nvidia.repo 2>/dev/null || true
 
 echo "  INFO  nvidia userland: $(rpm -q --qf '%{VERSION}' nvidia-driver-libs) (modules: $(rpm -q --qf '%{VERSION}' kernel-p03-nvidia-open))"
 echo "::endgroup::"

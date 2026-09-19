@@ -39,7 +39,7 @@ echo "::endgroup::"
 echo "::group::guarded-removals — reverse-dep gates (sddm, cage)"
 for p in sddm cage; do
   if rpm -q "$p" >/dev/null 2>&1; then
-    reqs="$(dnf -q repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
+    reqs="$(dnf5 -q repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
     if [ -n "${reqs}" ]; then
       echo "  GATE  keeping ${p} — required by:"
       echo "${reqs}" | sed 's/^/          /'
@@ -57,7 +57,7 @@ echo "::endgroup::"
 echo "::group::guarded-removals — dnf remove"
 if [ "${#present[@]}" -gt 0 ]; then
   echo "  INFO  Removing ${#present[@]} package(s): ${present[*]}"
-  if dnf -y remove "${present[@]}"; then
+  if dnf5 -y remove "${present[@]}"; then
     echo "  OK    dnf remove succeeded"
   else
     echo "  WARN  dnf remove exited non-zero — hard verification below will catch survivors" >&2

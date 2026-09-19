@@ -12,6 +12,7 @@ dnf5 -y --setopt=install_weak_deps=False group-install \
   || true
 dnf5 -y --setopt=install_weak_deps=False install \
   accountsservice \
+  adw-gtk3 \
   bleachbit \
   bluez \
   bluez-libs \
@@ -118,7 +119,7 @@ dnf5 -y --setopt=install_weak_deps=False install \
 # --- desktop stack: lionheartp COPR per-use. NOTE: weak deps are OFF, so
 # every Hyprland-stack weak dep we rely on must be listed here explicitly
 # (hyprland-guiutils, xdg-desktop-portal-{hyprland,gtk}, qt6ct, nwg-look).
-dnf5 -y copr enable -y lionheartp/Hyprland
+dnf5 -y copr enable lionheartp/Hyprland
 dnf5 -y --setopt=install_weak_deps=False install \
   cliphist \
   greetd \
@@ -144,7 +145,7 @@ dnf5 -y --setopt=install_weak_deps=False install \
   thunar-volman \
   xdg-desktop-portal-gtk \
   xdg-desktop-portal-hyprland
-dnf5 -y copr disable -y lionheartp/Hyprland
+dnf5 -y copr disable lionheartp/Hyprland
 # --- gaming (RPM Fusion + Fedora; terra bits live in 11-terra.sh).
 # gamescope + mangohud come from Fedora now (terra-gamescope/-mangohud were
 # retired upstream — verified live 2026-09-19); mangohud.i686 covers 32-bit
@@ -160,19 +161,19 @@ dnf5 -y --setopt=install_weak_deps=False install \
   steam \
   steam-devices \
   usbip \
-  ydotool
+  ydotool \
+  zenity
 # --- bazaar: ublue COPR per-use ---
-dnf5 -y copr enable -y ublue-os/packages
+dnf5 -y copr enable ublue-os/packages
 dnf5 -y --setopt=install_weak_deps=False install \
-  bazaar \
-  || true
-dnf5 -y copr disable -y ublue-os/packages
+  bazaar
+dnf5 -y copr disable ublue-os/packages
 # --- apps: zen-browser (sneexy COPR per-use), vscode/brave (vendor repos
 # per-use: written, used, disabled and deleted inside this stage) ---
-dnf5 -y copr enable -y sneexy/zen-browser
+dnf5 -y copr enable sneexy/zen-browser
 dnf5 -y --setopt=install_weak_deps=False install \
   zen-browser
-dnf5 -y copr disable -y sneexy/zen-browser
+dnf5 -y copr disable sneexy/zen-browser
 install -Dm0644 /dev/null /etc/yum.repos.d/vscode.repo
 cat > /etc/yum.repos.d/vscode.repo <<'REPO'
 [code]

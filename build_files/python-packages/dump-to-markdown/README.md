@@ -13,7 +13,7 @@ is included. Stdlib-only: no third-party runtime dependencies.
 ## Install
 
 Halcyon bakes this into the built image (`/usr/bin/dump-to-markdown`) at
-build time via `files/scripts/install-dump-to-markdown.sh`. For use on a
+build time via `build_files/install-dump-to-markdown.sh`. For use on a
 dev machine, install it from this repo:
 
 ```sh

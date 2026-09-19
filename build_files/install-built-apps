@@ -9,10 +9,10 @@ echo "::group::install-built-apps — obsidian/zotero/pyprland/texlive/python"
 export BUILD_SCRIPTS=/ctx
 rm -rf /usr/src/python-packages
 cp -a /ctx/python-packages /usr/src/python-packages
-bash /ctx/install-obsidian
-bash /ctx/install-zotero
-bash /ctx/install-pyprland
-bash /ctx/install-texlive
-bash /ctx/install-python-packages
+/ctx/install-obsidian
+/ctx/install-zotero
+/ctx/install-pyprland
+/ctx/install-texlive
+/ctx/install-python-packages
 rm -rf /usr/src/python-packages
 echo "::endgroup::"

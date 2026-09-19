@@ -118,19 +118,30 @@ RestartSec=2
 WantedBy=graphical-session.target
 UNIT
   echo "--- install-pyprland.service written"
+fi
 
 # halcyon: pyprland.service is enabled --global for ALL users/DEs. Gate it to
 # Hyprland sessions with a real unit condition instead of the upstream
-# ExecStartPre no-op ('[ ... ] || exit 0' is success either way). A drop-in
-# covers both the upstream-unit and inline-unit paths above.
+# ExecStartPre no-op ('[ ... ] || exit 0' is success either way). This drop-in
+# is UNCONDITIONAL — it covers both the upstream-unit path (upstream ships
+# systemd-unit/pyprland.service) and the inline-unit fallback above.
+# Upstream's unit also ExecStarts with --debug into ${XDG_STATE_HOME}/tmp —
+# give the user manager a sane default in case the session never imported it.
+# NOTE: ConditionEnvironment reads the user manager's environment, so the
+# Hyprland session must run
+#   dbus-update-activation-environment --systemd XDG_CURRENT_DESKTOP
+# (standard in Hyprland/noctalia session startup) or pyprland silently
+# never starts.
 mkdir -p /usr/lib/systemd/user/pyprland.service.d
 cat >/usr/lib/systemd/user/pyprland.service.d/10-halcyon-condition.conf <<'UNIT'
 [Unit]
 # Pyprland is a Hyprland plugin daemon — skip it on every other session.
 ConditionEnvironment=XDG_CURRENT_DESKTOP=Hyprland
+
+[Service]
+Environment=XDG_STATE_HOME=%h/.local/state
 UNIT
-echo "  OK    ConditionEnvironment drop-in installed"
-fi
+echo "  OK    ConditionEnvironment drop-in installed (unconditional)"
 
 echo "--- install-pyprland complete: Pyprland ${LATEST_TAG} → ${INSTALL_DIR}, /usr/bin/pypr ---"
 echo "::endgroup::"

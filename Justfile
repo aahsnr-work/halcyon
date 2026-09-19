@@ -8,6 +8,7 @@ export image_desc := env_var("IMAGE_DESC")
 export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
+export fedora_version := env_var("FEDORA_VERSION")
 
 default:
     @just --list
@@ -56,7 +57,8 @@ build $target_image=image_name $tag=default_tag:
     GIT_SHA=$(git rev-parse --short HEAD)
     # consumed by the Containerfile ARGs (bazzite convention:
     # version = <fedora-major>.<yyyymmdd>, revision = git sha)
-    BUILD_ARGS+=("--build-arg" "IMAGE_VERSION=$(rpm -E %fedora).$(date +%Y%m%d)")
+    BUILD_ARGS+=("--build-arg" "FEDORA_VERSION=${fedora_version}")
+    BUILD_ARGS+=("--build-arg" "IMAGE_VERSION=${fedora_version}.$(date +%Y%m%d)")
     BUILD_ARGS+=("--build-arg" "SOURCE_SHA=${GIT_SHA}")
 
     if [[ -z "$(git status -s)" ]]; then
@@ -108,8 +110,8 @@ generate-build-tags $target_image=image_name $tag=default_tag:
     BUILD_TAGS+=("${DATE}")
     BUILD_TAGS+=("${tag}")
     BUILD_TAGS+=("${tag}-${DATE}")
-    BUILD_TAGS+=("44")
-    BUILD_TAGS+=("${DATE}-44")
+    BUILD_TAGS+=("${fedora_version}")
+    BUILD_TAGS+=("${DATE}-${fedora_version}")
 
     echo "${BUILD_TAGS[@]}"
 

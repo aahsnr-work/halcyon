@@ -681,6 +681,7 @@ password-feedback ACTION="":
     else
       echo 'Defaults pwfeedback' | sudo tee $PWFEEDBACK_FILE
       echo "enabled, restart terminal to see changes"
+    fi
 
 # Manage global Proton DLSS upgrade; updates DLSS DLLs for Proton. Options: enable | disable
 [group("gaming")]

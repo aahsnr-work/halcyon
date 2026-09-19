@@ -32,6 +32,8 @@ TERRA_PKGS=(
   umu-launcher
   umu-wrapper
   bazzite-portal
+  # cursor theme (Terra-only; Fedora's bibata package does not exist)
+  bibata-cursor-theme
   # fonts.yml parity (Terra-only nerd fonts)
   jetbrainsmono-nerd-fonts
   nerdfontssymbolsonly-nerd-fonts

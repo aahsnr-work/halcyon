@@ -9,14 +9,14 @@
 # installs packages, registers imports, and wires the update timer.
 set -euo pipefail
 echo "::group::setup-ujust — ublue-os-just + uupd"
-dnf5 -y copr enable -y ublue-os/packages
+dnf5 -y copr enable ublue-os/packages
 dnf5 -y --setopt=install_weak_deps=False install \
   glow \
   stress-ng \
   ublue-os-just \
   ublue-os-update-services \
   uupd
-dnf5 -y copr disable -y ublue-os/packages
+dnf5 -y copr disable ublue-os/packages
 
 # the machinery must exist — fail loudly if the package layout changed
 test -x /usr/bin/ujust || { echo "  FAIL  /usr/bin/ujust missing from ublue-os-just"; exit 1; }

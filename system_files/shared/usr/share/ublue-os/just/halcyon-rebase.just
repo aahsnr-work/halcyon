@@ -19,4 +19,5 @@ rebase-to-custom tag="latest":
     echo "Rebase prepared successfully!"
     echo "Reboot into the new deployment:  systemctl reboot"
     echo "After reboot, switch to the signed tag (README: Install / rebase):"
-    echo "  sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/aahsnr-work/halcyon:{{tag}}"
+    echo "  sudo bootc switch --enforce-container-sigpolicy ostree-image-signed:docker://ghcr.io/aahsnr-work/halcyon:{{tag}}"
+    echo "  (the image ships /usr/etc/pki/containers/halcyon.pub + a sigstore policy entry — verification is enforced by policy.json)"

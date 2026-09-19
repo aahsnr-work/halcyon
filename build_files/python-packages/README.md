@@ -1,8 +1,8 @@
 # halcyon Python packages
 
-Staged into the image at build time by `recipes/modules/build-scripts.yml`
+Staged into the image at build time by `build_files (built-apps stage)`
 (→ `/usr/src/python-packages`) and installed by
-`files/scripts/install-python-packages.sh` into one shared venv at
+`build_files/install-python-packages.sh` into one shared venv at
 `/usr/lib/halcyon-python`. Every console script is symlinked separately into
 `/usr/bin`, so each tool is its own binary on PATH. All packages are
 stdlib-only (zero pip dependencies) and build-verified by
