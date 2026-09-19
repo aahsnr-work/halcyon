@@ -72,8 +72,11 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
 ```
 ├── Containerfile            # the single source of build-order truth
 ├── build_files/             # semantic unnumbered helpers (never in the image)
-│   ├── remove-packages      #   removals FIRST — pristine-base blast radius
-│   ├── setup-repos          #   RPM Fusion (NVIDIA-excluded) + negativo17
+│   ├── packages.json        # SINGLE SOURCE OF TRUTH for every dnf/flatpak package
+│   ├── packages-lib         # jq accessors the stages source (fail-fast validation)
+│   ├── remove-packages      #   removals SECOND — JSON-driven, rpm-resolved
+│   ├── setup-repos          #   FIRST — jq/dnf5-plugins bootstrap + RPM Fusion
+│   │                        #   (NVIDIA-excluded) + negativo17
 │   ├── install-kernel       #   p03 + nvidia-open (COPR per-use)
 │   ├── install-packages     #   core/desktop/gaming/apps (repos per-use)
 │   ├── install-terra        #   USER-EDITABLE Terra list (Terra-exclusive)
@@ -96,13 +99,59 @@ image carries Fedora repos only.
 
 ---
 
+## Adding or removing packages (packages.json)
+
+**`build_files/packages.json` is the single source of truth** for every
+package in the image — dnf and flatpak alike, in the
+[ublue-os/main](https://github.com/ublue-os/main) style. The build stages
+never hardcode package lists: each stage sources `build_files/packages-lib`
+and reads its group with jq, and the build **fails fast** if the JSON is
+malformed.
+
+| Group | Resolved from | Consumed by |
+|---|---|---|
+| `fedora-core` | Fedora | install-packages |
+| `fedora-hardware` | Fedora | install-packages |
+| `hyprland-copr` | COPR `lionheartp/Hyprland` | install-packages |
+| `gaming` | Fedora + RPM Fusion | install-packages |
+| `bazaar-copr` | COPR `ublue-os/packages` | install-packages |
+| `zen-copr` | COPR `sneexy/zen-browser` | install-packages |
+| `vendor-apps` / `vendor-apps-optional` | per-use vendor repos (VS Code, Brave) | install-packages |
+| `fedora-devtools` | Fedora | install-devtools |
+| `lazygit-copr` | COPR `atim/lazygit` | install-devtools |
+| `nix` | Fedora | install-nix |
+| `flatpak` | Fedora | setup-flatpaks |
+| `ujust-copr` / `ujust-fedora` | COPR `ublue-os/packages` / Fedora | setup-ujust |
+| `terra` | **Terra only** (`--disablerepo='*'`) | install-terra |
+| `all.exclude.all` | removals — resolved through `rpm -qa`, absent names tolerated | remove-packages |
+| `flatpak.install` / `flatpak.remove` | Flathub (user repo, at first login) | setup-flatpaks |
+
+**To add a package:** put its name in the group matching the repo it resolves
+from, then rebuild (`just build localhost/halcyon latest`). Only if a brand-new
+repo is needed do you also add a group here and a matching enable→install→
+disable window in the consuming stage. **To remove one:** delete it from its
+group (and, if the base might ship it, add it to `all.exclude.all`).
+
+Rules the stages enforce while consuming the catalog:
+
+- weak deps are **off** on every install — list any former weak dep explicitly;
+- `terra` groups resolve **exclusively** from Terra (`--disablerepo='*'`) —
+  a missing package fails the build rather than silently falling back;
+- third-party repos are enabled only inside the stage that consumes them,
+  disabled immediately after, and deleted by `finalize`;
+- the comps group `@custom-environment` and the Terra repo-bootstrap packages
+  (`terra-release*`) stay in their scripts — they are not catalog entries.
+
+---
+
 ## Build & CI
 
 - `build.yml` (daily cron 08:00 UTC, push, PR, manual): polls the consumed
   COPRs for healthy metadata, frees runner disk, builds with
   `podman build --pull`, writes a **package-count report** to the run summary,
   then signs with cosign (`SIGNING_SECRET`) and publishes to GHCR.
-- Local test build: `podman build --pull -t localhost/halcyon:latest .`
+- Local test build: `just build localhost/halcyon latest` (equivalent to CI,
+  including the OCI/artifacthub label scheme)
 - OCI labels (`org.opencontainers.image.*`) are set from
   `--build-arg IMAGE_VERSION=<fedora>.<date>` and `SOURCE_SHA=<git sha>`
   (CI supplies both). `bootc container lint` runs network-isolated as the
