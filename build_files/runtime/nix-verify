@@ -10,8 +10,9 @@ gate "nix package installed"             rpm -q nix
 gate "nix-daemon package installed"      rpm -q nix-daemon
 gate "var-nix.service unit"              test -f /usr/lib/systemd/system/var-nix.service
 gate "nix.mount unit"                    test -f /usr/lib/systemd/system/nix.mount
-gate "nix tmpfiles (store dirs)"         test -f /usr/lib/tmpfiles.d/nix.conf
-gate "halcyon nix tmpfiles survived"  grep -q "1775 root nixbld" /usr/lib/tmpfiles.d/zz-halcyon-nix.conf
+# our overlay file is zz-halcyon-nix.conf (renamed from nix.conf to avoid
+# the overlay-overwrite collision with the Fedora nix RPM's own tmpfiles)
+gate "nix tmpfiles (store dirs)"         grep -q "1775 root nixbld" /usr/lib/tmpfiles.d/zz-halcyon-nix.conf
 gate "nix profile HOME-resolution hook"  test -f /etc/profile.d/01-nix-resolve-home-env.sh
 gate "nix-daemon enabled"                systemctl is-enabled nix-daemon
 echo "::endgroup::"
