@@ -20,29 +20,11 @@ set -euo pipefail
 echo "::group::install-terra — Terra packages"
 FEDORA_MAJOR="$(rpm -E %fedora)"
 
-# --- the list you edit -----------------------------------------------------
+# --- the list you edit lives in build_files/packages.json (group "terra") ---
 # NOTE: terra-gamescope/terra-mangohud no longer exist in Terra (verified
 # live 2026-09-19) — Fedora 44 provides gamescope + mangohud directly, and
-# 10-packages.sh installs them (incl. mangohud.i686 for 32-bit overlays).
-TERRA_PKGS=(
-  # desktop/gaming stack that main inherited from the Bazzite base
-  zed
-  scx-scheds
-  scx-tools
-  umu-launcher
-  umu-wrapper
-  bazzite-portal
-  # cursor theme (Terra-only; Fedora's bibata package does not exist)
-  bibata-cursor-theme
-  # fonts.yml parity (Terra-only nerd fonts)
-  jetbrainsmono-nerd-fonts
-  nerdfontssymbolsonly-nerd-fonts
-  # former brew formulas that exist only in Terra (not Fedora, not COPRs)
-  golang-github-jesseduffield-lazygit
-  starship
-  yazi
-  zellij
-)
+# install-packages handles them (incl. mangohud.i686 for 32-bit overlays).
+readarray -t TERRA_PKGS < <(packages_for terra)
 # ---------------------------------------------------------------------------
 
 # 1) enable Terra via repofrompath and install the release packages with

@@ -32,6 +32,8 @@ cosign.pub                 # public signing key (see §7 "signing gap")
 .containerignore           # keep docs/artifacts out of the build context
 
 build_files/               # the `ctx` stage — NEVER ends up in the image
+  packages.json            # SINGLE SOURCE OF TRUTH for every dnf/flatpak package
+  packages-lib             # jq accessors (source it; see §6 "package catalog")
   cleanup                  # end-of-RUN hygiene, called after every mutating RUN
   libdnf5.conf.d/          # dnf5 main-config drop-in (see §7)
   python-packages/         # 11 stdlib-only src-layout Python tools
@@ -159,6 +161,19 @@ script costs a full ~40-minute CI build.
 ---
 
 ## 6. Conventions by file type
+
+### Package catalog (`build_files/packages.json`)
+- Every dnf/flatpak package name lives in `packages.json` — groups map 1:1 to
+  stages (`fedora-core`, `fedora-hardware`, `hyprland-copr`, `gaming`,
+  `bazaar-copr`, `zen-copr`, `vendor-apps`(+`-optional`), `fedora-devtools`,
+  `lazygit-copr`, `nix`, `flatpak`, `ujust-copr`, `ujust-fedora`, `terra`),
+  plus `all.exclude.all` (removals) and `flatpak.install`/`flatpak.remove`.
+- Stages never hardcode package lists: `source /ctx/packages-lib`, then
+  `readarray -t PKGS < <(packages_for <group>)`. Terra resolves exclusively
+  (`--disablerepo='*'`); excludes are rpm-resolved (absent names tolerated).
+- Add a package = add a name to the right group. New repo needed = new group
+  + a repo window in the consuming stage. Run `jq empty build_files/packages.json`
+  — the build fails fast on malformed JSON by design.
 
 ### Build scripts (`build_files/*`)
 - `#!/usr/bin/env bash` + `set -euo pipefail` (use `set -uo pipefail` only when

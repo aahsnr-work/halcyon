@@ -8,14 +8,16 @@
 # ship via the system_files/shared overlay (root COPY); this stage only
 # installs packages, registers imports, and wires the update timer.
 set -euo pipefail
+source /ctx/packages-lib
+packages_validate
 echo "::group::setup-ujust — ublue-os-just + uupd"
 dnf5 -y copr enable ublue-os/packages
+readarray -t UJUST_COPR_PKGS < <(packages_for ujust-copr)
 dnf5 -y --setopt=install_weak_deps=False install \
-  glow \
-  stress-ng \
-  ublue-os-just \
-  ublue-os-update-services \
-  uupd
+  "${UJUST_COPR_PKGS[@]}"
+readarray -t UJUST_FEDORA_PKGS < <(packages_for ujust-fedora)
+dnf5 -y --setopt=install_weak_deps=False install \
+  "${UJUST_FEDORA_PKGS[@]}"
 dnf5 -y copr disable ublue-os/packages
 
 # the machinery must exist — fail loudly if the package layout changed

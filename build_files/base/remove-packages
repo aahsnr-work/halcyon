@@ -11,8 +11,8 @@
 # Everything halcyon needs is (re)installed explicitly by later stages.
 #
 # Structure mirrors main's removals.yml:
-#   Step B — remove proven-present packages (full main list + the bootc-era
-#            nano/zram trio), each guarded by rpm -q
+#   Step B — remove the packages.json exclude.all list, resolved through
+#            rpm -qa (main's packages.sh pattern; absent names tolerated)
 #   Step C — guarded-removals.sh (candidates + reverse-dep gates + must-be-
 #            gone verification; keeper verification lives in 90-verify.sh
 #            against the FINAL state)
@@ -20,56 +20,17 @@
 #   Step E — gnome-extensions.sh (extension dirs + gschema overrides)
 #   Step F — fonts-cleanup.sh (unprotected, unreferenced font RPMs)
 set -euo pipefail
-echo "::group::remove-packages — Step B: proven-present removals (main removals.yml list)"
-REMOVAL_CANDIDATES=(
-  # Bazzite/GNOME set from main's removals.yml Step B
-  nautilus-gsconnect
-  gnome-shell-extension-gsconnect
-  gnome-shell-extension-user-theme
-  gnome-search-yafti
-  gnome-rounded-blur
-  firewall-config
-  ibus-mozc
-  ibus-pinyin
-  ibus-table-chinese-cangjie
-  ibus-table-chinese-quick
-  inputplumber
-  steamos-manager-powerstation
-  jupiter-fan-control
-  jupiter-hw-support-btrfs
-  galileo-mura
-  steamdeck-dsp
-  powerbuttond
-  vpower
-  sdgyrodsu
-  hid-replay
-  steamdeck-backgrounds
-  steamdeck-gnome-presets
-  waydroid
-  fastfetch
-  firefox
-  firefox-langpacks
-  gnome-shell
-  mutter
-  gdm
-  gnome-session
-  gnome-session-wayland-session
-  nautilus
-  ptyxis
-  gnome-control-center
-  gnome-settings-daemon
-  gjs
-  xdg-desktop-portal-gnome
-  # bootc-era trim (halcyon manages swap + editors itself)
-  nano
-  nano-default-editor
-  zram-generator-defaults
-)
-PRESENT=()
-for pkg in "${REMOVAL_CANDIDATES[@]}"; do
-  rpm -q "${pkg}" >/dev/null 2>&1 && PRESENT+=("${pkg}")
-done
-if [ "${#PRESENT[@]}" -gt 0 ]; then
+source /ctx/packages-lib
+packages_validate
+echo "::group::remove-packages — Step B: proven-present removals (packages.json exclude.all)"
+# main pattern: the removal list lives in packages.json (all.exclude.all) and
+# is resolved through rpm -qa first, so entries absent from the base are
+# tolerated instead of failing the transaction.
+readarray -t REMOVAL_CANDIDATES < <(packages_excludes)
+if [ "${#REMOVAL_CANDIDATES[@]}" -gt 0 ]; then
+  readarray -t PRESENT < <(rpm -qa --qf '%{NAME}\n' "${REMOVAL_CANDIDATES[@]}" 2>/dev/null | sort -u || true)
+fi
+if [ "${#PRESENT[@]:-0}" -gt 0 ]; then
   echo "  INFO  removing ${#PRESENT[@]} present package(s): ${PRESENT[*]}"
   # --no-autoremove here: the base orphan sweep below is the only autoremove
   dnf5 -y remove --no-autoremove "${PRESENT[@]}"

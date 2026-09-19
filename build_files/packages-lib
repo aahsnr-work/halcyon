@@ -1,0 +1,31 @@
+# packages-lib — jq accessors for build_files/packages.json.
+# Source this file from any stage that consumes the package catalog:
+#   source /ctx/packages-lib
+# Style follows ublue-os/main's build_files/packages.sh (jq fail-fast
+# validation, readarray extraction). packages.json lives at the ctx root.
+
+PACKAGES_JSON="${PACKAGES_JSON:-/ctx/packages.json}"
+
+# Fail the build immediately if the catalog is malformed (main pattern).
+packages_validate() {
+  if ! jq empty "$PACKAGES_JSON" >/dev/null 2>&1; then
+    echo "  FAIL  packages.json contains syntax errors and cannot be parsed" >&2
+    exit 1
+  fi
+}
+
+# Print the package names of one include group (e.g. packages_for fedora-core).
+packages_for() {
+  jq -r --arg group "$1" '.all.include[$group] // [] | .[]' "$PACKAGES_JSON"
+}
+
+# Print the removal list (all.exclude.all) — entries may be absent from the
+# base; consumers resolve them through rpm -qa before removing (main pattern).
+packages_excludes() {
+  jq -r '.all.exclude.all // [] | .[]' "$PACKAGES_JSON"
+}
+
+# Flatpak app lists: flatpak_apps install | flatpak_apps remove
+flatpak_apps() {
+  jq -r --arg key "$1" '.flatpak[$key] // [] | .[]' "$PACKAGES_JSON"
+}

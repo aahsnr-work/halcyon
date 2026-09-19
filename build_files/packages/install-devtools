@@ -7,31 +7,18 @@ echo "::group::install-devtools — brew-formula replacements (Fedora RPMs)"
 # NOTE: lazygit/starship/yazi/zellij are NOT in Fedora 44 (verified in the
 # 2026-09-19 CI-equivalent build) — all four come from Terra via 11-terra.sh
 # (lazygit ships there under its Go name golang-github-jesseduffield-lazygit).
+source /ctx/packages-lib
+packages_validate
+readarray -t DEV_PKGS < <(packages_for fedora-devtools)
 dnf5 -y --setopt=install_weak_deps=False install \
-  atuin \
-  bat \
-  btop \
-  cava \
-  chafa \
-  chezmoi \
-  direnv \
-  dust \
-  eza \
-  fd-find \
-  fpaste \
-  fzf \
-  wl-clipboard \
-  gnuplot \
-  jq \
-  pandoc \
-  python3 \
-  perl \
-  ripgrep \
-  tealdeer \
-  uv
-echo "::endgroup::"
+  "${DEV_PKGS[@]}"
+# lazygit is not in Fedora/Terra — COPR per-use (repo lifecycle policy)
+dnf5 -y copr enable atim/lazygit
+readarray -t LG_PKGS < <(packages_for lazygit-copr)
+dnf5 -y --setopt=install_weak_deps=False install \
+  "${LG_PKGS[@]}"
+dnf5 -y copr disable atim/lazygit
 
-# ---------------------------------------------------------------------------
 # TODO(user): bun, pixi, opencode publish no Fedora RPMs — add their
 # upstream-binary wrapper installs HERE (monorepo type-B specs replace this
 # later). Pattern: resolve the latest release via the GitHub API, download

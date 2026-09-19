@@ -24,8 +24,9 @@ check:
     while read -r file; do
         echo "Checking syntax: $file"
         bash -n "$file" || status=1
-    done < <(find build_files -mindepth 2 -maxdepth 2 -type f \
-               ! -path "*libdnf5.conf.d*" ! -path "*python-packages*")
+    done < <(find build_files -type f \
+               ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
+               ! -name "*.json" ! -name "README*")
     exit "$status"
 
 # Fix Justfile formatting
@@ -44,8 +45,9 @@ lint:
         echo "shellcheck could not be found. Please install it."
         exit 1
     fi
-    find build_files -mindepth 2 -maxdepth 2 -type f \
+    find build_files -type f \
         ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
+        ! -name "*.json" ! -name "README*" \
         -exec shellcheck --shell=bash {} ';'
 
 # Build the container image with the CI label scheme

@@ -49,15 +49,18 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
     install -Dm0644 /ctx/libdnf5.conf.d/99-halcyon-retries.conf \
       /etc/dnf/libdnf5.conf.d/99-halcyon-retries.conf
 
-# ---- Stage 1: removals FIRST — pristine-base blast radius (main ordering) --
-RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
-    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/base/remove-packages && /ctx/cleanup
-
-# ---- Stage 2: shared external repos (RPM Fusion NVIDIA-excluded + negativo17)
+# ---- Stage 1: shared external repos + jq bootstrap (packages.json consumer)
+# Repos come first so the removals stage can read its list from packages.json;
+# jq/dnf5-plugins are two tiny build tools and do not meaningfully change the
+# pristine graph the removals run against.
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
     /ctx/base/setup-repos && /ctx/cleanup
+
+# ---- Stage 2: removals on the near-pristine base (JSON-driven, main ordering)
+RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
+    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    /ctx/base/remove-packages && /ctx/cleanup
 
 # ---- Stage 3: p03 kernel + prebuilt nvidia-open modules (Stage K1) ---------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \

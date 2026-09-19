@@ -5,13 +5,18 @@
 # in 21-flatpak-setup.sh, hyprland-guiutils/xdg portals below).
 # One package per line for reviewability.
 set -euo pipefail
+source /ctx/packages-lib
+packages_validate
 echo "::group::install-packages — core + desktop + gaming + apps"
-# --- core set (main core.yml parity; Fedora repos) ---
+# Package LISTS live in build_files/packages.json (single source of truth);
+# this stage owns the repo windows and flags. The comps group stays here —
+# comps groups are not catalog entries.
 dnf5 -y --setopt=install_weak_deps=False group-install \
   custom-environment \
   || true
+readarray -t CORE_PKGS < <(packages_for fedora-core)
 dnf5 -y --setopt=install_weak_deps=False install \
-  accountsservice \
+  "${CORE_PKGS[@]}"
   adw-gtk3 \
   bleachbit \
   bluez \
@@ -86,8 +91,9 @@ dnf5 -y --setopt=install_weak_deps=False install \
   zsh
 # --- hardware support the Bazzite base used to provide (fedora-bootc is
 # bare; rakuos-base installs the same classes explicitly) ---
+readarray -t HW_PKGS < <(packages_for fedora-hardware)
 dnf5 -y --setopt=install_weak_deps=False install \
-  linux-firmware \
+  "${HW_PKGS[@]}"
   microcode_ctl \
   amd-ucode-firmware \
   amd-gpu-firmware \
@@ -120,59 +126,29 @@ dnf5 -y --setopt=install_weak_deps=False install \
 # every Hyprland-stack weak dep we rely on must be listed here explicitly
 # (hyprland-guiutils, xdg-desktop-portal-{hyprland,gtk}, qt6ct, nwg-look).
 dnf5 -y copr enable lionheartp/Hyprland
+readarray -t HYPRLAND_PKGS < <(packages_for hyprland-copr)
 dnf5 -y --setopt=install_weak_deps=False install \
-  cliphist \
-  greetd \
-  gnome-keyring \
-  gnome-tweaks \
-  hyprland-git \
-  hyprland-guiutils \
-  hyprpwcenter \
-  hyprshutdown \
-  kitty \
-  kitty-shell-integration \
-  kitty-terminfo \
-  noctalia-git \
-  noctalia-greeter-git \
-  nwg-look \
-  papers \
-  papirus-icon-theme \
-  qt6ct \
-  Thunar \
-  thunar-archive-plugin \
-  thunar-media-tags-plugin \
-  thunar-vcs-plugin \
-  thunar-volman \
-  xdg-desktop-portal-gtk \
-  xdg-desktop-portal-hyprland
+  "${HYPRLAND_PKGS[@]}"
 dnf5 -y copr disable lionheartp/Hyprland
 # --- gaming (RPM Fusion + Fedora; terra bits live in 11-terra.sh).
 # gamescope + mangohud come from Fedora now (terra-gamescope/-mangohud were
 # retired upstream — verified live 2026-09-19); mangohud.i686 covers 32-bit
 # overlays for Steam/Proton.
+readarray -t GAMING_PKGS < <(packages_for gaming)
 dnf5 -y --setopt=install_weak_deps=False install \
-  evtest \
-  gamemode \
-  gamescope \
-  input-remapper \
-  lutris \
-  mangohud \
-  mangohud.i686 \
-  steam \
-  steam-devices \
-  usbip \
-  ydotool \
-  zenity
+  "${GAMING_PKGS[@]}"
 # --- bazaar: ublue COPR per-use ---
 dnf5 -y copr enable ublue-os/packages
+readarray -t BAZAAR_PKGS < <(packages_for bazaar-copr)
 dnf5 -y --setopt=install_weak_deps=False install \
-  bazaar
+  "${BAZAAR_PKGS[@]}"
 dnf5 -y copr disable ublue-os/packages
 # --- apps: zen-browser (sneexy COPR per-use), vscode/brave (vendor repos
 # per-use: written, used, disabled and deleted inside this stage) ---
 dnf5 -y copr enable sneexy/zen-browser
+readarray -t ZEN_PKGS < <(packages_for zen-copr)
 dnf5 -y --setopt=install_weak_deps=False install \
-  zen-browser
+  "${ZEN_PKGS[@]}"
 dnf5 -y copr disable sneexy/zen-browser
 install -Dm0644 /dev/null /etc/yum.repos.d/vscode.repo
 cat > /etc/yum.repos.d/vscode.repo <<'REPO'
@@ -194,16 +170,15 @@ type=rpm-md
 gpgcheck=1
 gpgkey=https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 REPO
+readarray -t VENDOR_PKGS < <(packages_for vendor-apps)
 dnf5 -y --setopt=install_weak_deps=False install \
-  brave-browser \
-  code \
-  emacs-pgtk \
-  neovim \
-  nodejs \
-  npm \
-  tree-sitter-cli
-dnf5 -y --setopt=install_weak_deps=False install \
-  brave-origin \
-  || true   # skip-unavailable semantics (apps.yml)
+  "${VENDOR_PKGS[@]}"
+# brave-origin: skip-unavailable semantics (may not exist in the vendor repo)
+readarray -t VENDOR_OPT_PKGS < <(packages_for vendor-apps-optional)
+if [ "${#VENDOR_OPT_PKGS[@]}" -gt 0 ]; then
+  dnf5 -y --setopt=install_weak_deps=False install \
+    "${VENDOR_OPT_PKGS[@]}" \
+    || true
+fi
 rm -f /etc/yum.repos.d/vscode.repo /etc/yum.repos.d/brave-browser.repo
 echo "::endgroup::"
