@@ -16,3 +16,7 @@ notes/
 *.tar.gz
 *.oci
 *.iso
+# python build artifacts (exist on disk from local dev, never needed in ctx)
+**/__pycache__/
+**/*.egg-info/
+build_files/python-packages/**/build/
