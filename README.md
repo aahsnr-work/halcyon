@@ -118,7 +118,6 @@ malformed.
 | `zen-copr` | COPR `sneexy/zen-browser` | install-packages |
 | `vendor-apps` / `vendor-apps-optional` | per-use vendor repos (VS Code, Brave) | install-packages |
 | `fedora-devtools` | Fedora | install-devtools |
-| `lazygit-copr` | COPR `atim/lazygit` | install-devtools |
 | `nix` | Fedora | install-nix |
 | `flatpak` | Fedora | setup-flatpaks |
 | `ujust-copr` / `ujust-fedora` | COPR `ublue-os/packages` / Fedora | setup-ujust |

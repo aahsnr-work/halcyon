@@ -166,7 +166,7 @@ script costs a full ~40-minute CI build.
 - Every dnf/flatpak package name lives in `packages.json` — groups map 1:1 to
   stages (`fedora-core`, `fedora-hardware`, `hyprland-copr`, `gaming`,
   `bazaar-copr`, `zen-copr`, `vendor-apps`(+`-optional`), `fedora-devtools`,
-  `lazygit-copr`, `nix`, `flatpak`, `ujust-copr`, `ujust-fedora`, `terra`),
+  `nix`, `flatpak`, `ujust-copr`, `ujust-fedora`, `terra`),
   plus `all.exclude.all` (removals) and `flatpak.install`/`flatpak.remove`.
 - Stages never hardcode package lists: `source /ctx/packages-lib`, then
   `readarray -t PKGS < <(packages_for <group>)`. Terra resolves exclusively
@@ -276,7 +276,10 @@ that is the build-time smoke test.
   describe an ordering that no longer holds. Treat their comments as historical.
 - **Package names change between Fedora releases.** Terra retired
   `terra-gamescope`/`terra-mangohud`; `lazygit` ships as
-  `golang-github-jesseduffield-lazygit`. Fedora 44 renames to know:
+  `golang-github-jesseduffield-lazygit`. **When a package moves repos, purge
+  the old source everywhere** — json group, consuming stage, docs — or both
+  copies file-conflict at install time (lazygit: atim COPR vs Terra both own
+  /usr/bin/lazygit). Fedora 44 renames to know:
   `du-dust` (not dust), `pandoc-cli` (not pandoc), `nodejs24` +
   `nodejs24-npm` (not nodejs/npm), `adw-gtk3-theme` (not adw-gtk3),
   `Thunar` (capital T). Before adding a package, verify it resolves for F44

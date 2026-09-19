@@ -12,7 +12,6 @@
       "vendor-apps": "Resolved from the per-use vendor repos written inside install-packages (vscode, brave).",
       "vendor-apps-optional": "Installed with skip-unavailable semantics (may be absent from the vendor repo).",
       "fedora-devtools": "Former brew formulas available in Fedora (install-devtools).",
-      "lazygit-copr": "Resolved from COPR atim/lazygit (install-devtools).",
       "nix": "Winter-pattern nix packages (install-nix).",
       "flatpak": "The flatpak stack itself (setup-flatpaks); libnotify covers notify-send.",
       "ujust-copr": "ublue-os-just machinery + uupd from COPR ublue-os/packages (setup-ujust).",
@@ -209,9 +208,6 @@
         "ripgrep",
         "tealdeer",
         "uv"
-      ],
-      "lazygit-copr": [
-        "lazygit"
       ],
       "nix": [
         "nix",
