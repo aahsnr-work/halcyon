@@ -8,8 +8,18 @@ echo "::group::10-packages — core + desktop + gaming + apps"
 # needs them resolved, see the 2026 COPR weak-deps fix) ---
 dnf5 -y --setopt=install_weak_deps=False group-install custom-environment || true
 dnf5 -y --setopt=install_weak_deps=False install \
-  accountsservice bleachbit bluez-tools brightnessctl cargo cmake \
-  cronie curl ddcutil distrobox fail2ban file-roller flatseal fontconfig \
+  accountsservice \
+  bleachbit \
+  bluez \
+  bluez-libs \
+  bluez-tools \
+  brightnessctl \
+  cargo \
+  cmake \
+  cronie \
+  curl \
+  ddcutil \
+  distrobox fail2ban file-roller flatseal fontconfig \
   gcc-c++ git gsettings-desktop-schemas gtk4-layer-shell gzip hunspell \
   hunspell-en hunspell-en-GB hunspell-en-US ImageMagick imv inotify-tools \
   liberation-fonts libinput-utils logrotate lynis man-db mpv ninja-build \
@@ -21,6 +31,7 @@ dnf5 -y --setopt=install_weak_deps=False install \
   setroubleshoot-server setroubleshoot-plugins setools-console udica \
   jetbrains-mono-fonts google-noto-emoji-fonts google-noto-color-emoji-fonts \
   go grim pymol fastfetch just fonts-filesystem
+
 # --- hardware support the Bazzite base used to provide (fedora-bootc is
 # bare; rakuos-base installs the same classes explicitly) ---
 dnf5 -y install linux-firmware microcode_ctl amd-ucode-firmware amd-gpu-firmware \
@@ -56,7 +67,7 @@ dnf5 -y copr enable -y sneexy/zen-browser
 dnf5 -y install zen-browser
 dnf5 -y copr disable -y sneexy/zen-browser
 install -Dm0644 /dev/null /etc/yum.repos.d/vscode.repo
-cat > /etc/yum.repos.d/vscode.repo <<'REPO'
+cat >/etc/yum.repos.d/vscode.repo <<'REPO'
 [code]
 name=Visual Studio Code
 baseurl=https://packages.microsoft.com/yumrepos/vscode
@@ -66,7 +77,7 @@ gpgcheck=1
 gpgkey=https://packages.microsoft.com/keys/microsoft.asc
 REPO
 install -Dm0644 /dev/null /etc/yum.repos.d/brave-browser.repo
-cat > /etc/yum.repos.d/brave-browser.repo <<'REPO'
+cat >/etc/yum.repos.d/brave-browser.repo <<'REPO'
 [brave-browser]
 name=Brave Browser
 baseurl=https://brave-browser-rpm-release.s3.brave.com/x86_64/
@@ -76,6 +87,6 @@ gpgcheck=1
 gpgkey=https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 REPO
 dnf5 -y install code brave-browser emacs-pgtk neovim nodejs npm tree-sitter-cli
-dnf5 -y install brave-origin || true   # skip-unavailable semantics (apps.yml)
+dnf5 -y install brave-origin || true # skip-unavailable semantics (apps.yml)
 rm -f /etc/yum.repos.d/vscode.repo /etc/yum.repos.d/brave-browser.repo
 echo "::endgroup::"

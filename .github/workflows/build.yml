@@ -65,6 +65,31 @@ jobs:
           echo "date_tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
           echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
 
+      # Distinctive package-count report: run the freshly built image and
+      # write the census into the run summary (GITHUB_STEP_SUMMARY) plus a
+      # ::notice:: annotation. The census is also baked into the image at
+      # /usr/share/halcyon/package-count by build.d/90-verify.sh.
+      - name: Package count report
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.build.outputs.image }}:latest"
+          INFO=$(podman run --rm --entrypoint /bin/bash "$IMAGE" -c \
+            'echo "count=$(rpm -qa | wc -l)"; echo "kernel=$(rpm -q --qf "%{VERSION}-%{RELEASE}.%{ARCH}" kernel-p03 2>/dev/null || echo n/a)"')
+          COUNT=$(sed -n 's/^count=//p' <<< "$INFO")
+          KVER=$(sed -n 's/^kernel=//p' <<< "$INFO")
+          {
+            echo "## 📦 halcyon image package report"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| **Total installed RPM packages** | **${COUNT}** |"
+            echo "| p03 kernel | ${KVER} |"
+            echo "| Source | \`${{ steps.build.outputs.image }}:${{ steps.build.outputs.sha_tag }}-44\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=halcyon package count::${COUNT} RPMs installed (p03 kernel ${KVER})"
+          echo "  total installed RPM packages: ${COUNT}"
+          echo "  p03 kernel: ${KVER}"
+
       # sign + push only on branch pushes (not PRs) — same semantics as the
       # BlueBuild action had
       - name: Login to GHCR

@@ -71,5 +71,30 @@ gate "PATH guard present"              test -f /etc/profile.d/00-path-guard.sh
 gate "plymouth theme selected"         grep -q 'Theme=halcyon' /etc/plymouth/plymouthd.conf
 gate "os-release identity"             grep -q '^NAME=halcyon' /usr/lib/os-release
 gate "login shell with empty PATH finds grep" env -i PATH= HOME=/root /bin/bash -lc 'command -v grep'
+
+# --- package census (total + per-vendor provenance, baked into the image) ---
+echo "::group::90-verify — package census"
+TOTAL_PACKAGES="$(rpm -qa | wc -l)"
+echo "  INFO  total installed packages: ${TOTAL_PACKAGES}"
+# GitHub Actions annotation: podman build streams this line into the build
+# step's output, where the runner promotes it to a run notice.
+echo "::notice title=halcyon package count::${TOTAL_PACKAGES} RPMs installed"
+echo "  INFO  per-vendor breakdown (repo provenance):"
+rpm -qa --qf '%{VENDOR}\n' | sed 's/^$/  (no vendor)/' | sort | uniq -c | sort -rn | sed 's/^/        /'
+install -d -m0755 /usr/share/halcyon
+{
+  echo "halcyon image package census (generated at build time)"
+  echo "date_utc: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  echo "kernel_p03: $(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-p03 2>/dev/null || echo unknown)"
+  echo "total_packages: ${TOTAL_PACKAGES}"
+  echo
+  echo "per-vendor:"
+  rpm -qa --qf '%{VENDOR}\n' | sed 's/^$/  (no vendor)/' | sort | uniq -c | sort -rn | sed 's/^/  /'
+} > /usr/share/halcyon/package-count
+chmod 0644 /usr/share/halcyon/package-count
+echo "  INFO  census baked to /usr/share/halcyon/package-count (ujust package-count)"
+echo "::endgroup::"
+
+gate "package census baked"            test -s /usr/share/halcyon/package-count
 [ "$fail" = 0 ] || { echo "::error::image verification failed"; exit 1; }
 echo "::endgroup::"
