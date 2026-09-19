@@ -8,6 +8,10 @@ dnf5 -y --nogpgcheck install \
   "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
   "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 dnf5 -y install rpmfusion-free-appstream-data rpmfusion-nonfree-appstream-data || true
+# negativo17 NVIDIA userland (MIGRATION §4.3 K1: the kernel modules come
+# prebuilt from the kernel-p03 COPR; userland must be the same 615.71.09
+# driver line — this is the repo rakuos-base uses for its NVIDIA stack)
+dnf5 -y config-manager addrepo --from-repofile=https://negativo17.org/repos/fedora-nvidia.repo
 # Microsoft VS Code
 cat > /etc/yum.repos.d/vscode.repo <<'REPO'
 [code]
@@ -36,4 +40,7 @@ echo "excludepkgs=zlib" >> /etc/yum.repos.d/terra.repo   # terra zlib must not s
 dnf5 -y copr enable -y lionheartp/Hyprland
 dnf5 -y copr enable -y sneexy/zen-browser
 dnf5 -y copr enable -y ublue-os/packages
+# p03 kernel + prebuilt nvidia-open modules (MIGRATION §4.2 Stage K1; Stage K2
+# moves the build into halcyon-packages)
+dnf5 -y copr enable -y catpieleaf/kernel-p03
 echo "::endgroup::"

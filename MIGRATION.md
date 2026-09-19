@@ -1,6 +1,6 @@
 # MIGRATION.md — halcyon rebuild: bootc Containerfile + p03 kernel + RPM monorepo
 
-**Status:** plan — **partially executed**: the halcyon `container` branch currently builds on the Bazzite base (kernel + NVIDIA akmods + gaming stack included) while the COPR CDN outage blocks the p03 stage; the fedora-bootc + p03 route below remains the documented target and will be executed when the CDN recovers (the `02-kernel.sh` stage is pre-written). — replaces the former `ANDAMAN-MIGRATION.md`.
+**Status:** plan — **Stage K1 executed (2026-09-19)**: the COPR CDN recovered (repodata now served via the Pulp/`packages.redhat.com` redirect chain, verified live), and the `container` branch builds the documented target — `quay.io/fedora/fedora-bootc:44` + p03 kernel + `kernel-p03-nvidia-open` from COPR `catpieleaf/kernel-p03`, NVIDIA userland from **negativo17** (same 615.71.09 driver line; install mechanics per rakuos-base: `tsflags=noscripts`, explicit `depmod`+`dracut`). The interim Bazzite-base build (ublue akmods pattern) is retired. Remaining: monorepo stand-up (§6), COPR→monorepo flips (§11.1 steps 3–4). — replaces the former `ANDAMAN-MIGRATION.md`.
 **Date:** 2026-09-19 · **Target Fedora:** 44 · **Plan iterations:** 5 (three required + two verification passes; logged in §1.3)
 
 ---
@@ -106,7 +106,7 @@ BlueBuild-era gates assert COPR vendor stamps (`Fedora Copr - user lionheartp`).
 
 ## 4. Kernel: p03 (staged) + NVIDIA-open
 
-> **Implementation status (2026-09-19):** the interim `container` branch uses the **ublue akmods pattern** instead — stock/pinned Fedora kernel from `ghcr.io/ublue-os/akmods:main-44` + prebuilt `nvidia-open` modules from `akmods-nvidia-open:main-44`, following `ublue-os/main`'s install.sh (kernel erase → shim kernel-install plugins → install 5 kernel RPMs + akmod RPMs → dracut). The p03 swap below remains the plan for Stage K2.
+> **Implementation status (2026-09-19, updated):** Stage K1 **executed** on the `container` branch — `02-kernel.sh` enables COPR `catpieleaf/kernel-p03` (via `01-repos.sh`) and installs `kernel-p03` + `kernel-p03-nvidia-open` with `tsflags=noscripts` after removing the stock kernel `--no-autoremove` and wiping `/usr/lib/modules/*`, then runs explicit `depmod` (rakuos-base build_files/{build,nvidia}.sh pattern). The **initramfs is generated last**, in `70-initramfs.sh` after packages + branding, so the p03 initrd bakes in plymouth, the halcyon theme and the NVIDIA driver hooks (the BlueBuild build likewise ran its initramfs module after `branding.yml`). NVIDIA **userland comes from negativo17 leaf packages** (exact set + payload-extracted subpackages documented in §4.3), not RPM Fusion — verified 2026-09-19: RPM Fusion f44 userland is 595.58.03 (version mismatch) and hard-requires `nvidia-kmod`/`akmod-nvidia` (conflicts with the COPR kmod package), while negativo17 f44 is **exactly 615.71.09** but four of its subpackages are kmod-entangled and are payload-extracted instead of installed (§4.3). Verified on the p03 config: `CONFIG_SECURITY_SELINUX=y` (§4.4 first VERIFY item ✓). The earlier interim detour (Bazzite base + ublue akmods prebuilts) is retired; a `90-verify.sh` gate fails the build if userland and module versions ever drift apart. Also fixed en route: `.gitignore` ignored `/Containerfile`, so the Containerfile had never been committed — CI could never have built this branch.
 
 ### 4.1 What p03 is (verified from the COPR page and CatPieLeaf/linux-p03)
 
@@ -132,14 +132,17 @@ Then `bootc container lint` catches any initramfs/dracut regressions; `kernel-p0
 
 ### 4.3 NVIDIA-open
 
-- **K1:** `kernel-p03-nvidia-open` (COPR) — already ABI-matched to `kernel-p03`.
-- **K2 (later phase):** self-built akmods-style packages against `kernel-p03-devel` in CI (ublue-os/akmods pattern: build akmod RPMs per kernel release, sign with MOK). Documented, not scheduled.
+- **K1 (executed):** `kernel-p03-nvidia-open` (COPR) — already ABI-matched to `kernel-p03`. **Userland: negativo17 leaf packages** (`nvidia-driver-libs`(+i686), `nvidia-driver-cuda(-libs)`(+i686), `nvidia-modprobe`, `nvidia-settings`, `nvidia-persistenced`, `libva-nvidia-driver`, `nvidia-driver-selinux`), **not** RPM Fusion and **not** the negativo17 `nvidia-driver` meta. Verified 2026-09-19:
+  - RPM Fusion f44 userland is 595.58.03 (≠ the COPR modules' 615.71.09) and `xorg-x11-drv-nvidia` hard-requires `nvidia-kmod`/`akmod-nvidia` → conflicts with the COPR kmod package.
+  - negativo17 f44 is exactly **615.71.09**, but its `nvidia-kmod-common` hard-requires `nvidia-kmod = 615.71.09`, satisfiable only by its `dkms-nvidia` — also a conflict. Hence: leaf packages only (none of them requires `nvidia-kmod-common`), with the `nvidia-kmod-common` payload (GSP firmware, modprobe.d, udev rule, dracut conf) extracted file-only via `rpm2cpio`, and `nvidia-driver-selinux` installed as a real package for enforcing SELinux. This is the divergence point from rakuos-base, which instead DKMS-builds `dkms-nvidia` against its own `kernel-p03-v2-devel-matched` in-image — that DKMS route is our K2 fallback if userland/module versions ever drift.
+  - `90-verify.sh` fails the build if the driver version in the module metadata (`modinfo -F version` on the installed `nvidia.ko`) and the negativo17 userland (`nvidia-driver-libs` `%{VERSION}`) differ — the COPR kmod package's own `%{VERSION}` is the *kernel* version and cannot be compared (drift alarm → re-pin or flip to K2).
+- **K2 (later phase):** self-built akmods-style packages against `kernel-p03-devel` in CI (ublue-os/akmods pattern), or the rakuos-base DKMS route (`dkms-nvidia` + `tsflags=noscripts` + `LD=ld.bfd`, memory-capped jobs, and their `lazy_percpu_counter` source patch for F44 kernels). Documented, not scheduled.
 
-### 4.4 SELinux (status: in plan)
+### 4.4 SELinux (status: partially verified)
 
-- p03 is Fedora-SRPM-derived → carries Fedora's kernel config lineage including `CONFIG_SECURITY_SELINUX`. **VERIFY at Phase-1 first build:** `grep CONFIG_SECURITY_SELINUX /boot/config-$(uname -r)` after booting p03.
-- `kernel-p03-nvidia-open` modules must run under enforcing SELinux: VERIFY by booting with `enforcing=1` and checking `ausearch -m avc` for module-loading denials; if denials appear, the interim fix is a small local policy module (`audit2allow`), full policy work deferred.
-- The image keeps the Fedora `targeted` policy unchanged; `setroubleshoot` packages already in the recipe remain.
+- p03 is Fedora-SRPM-derived → carries Fedora's kernel config lineage including `CONFIG_SECURITY_SELINUX`. **Verified 2026-09-19 at build time:** the `kernel-p03-7.2.6.p03.32` config ships `CONFIG_SECURITY_SELINUX=y` (plus `selinux` in `CONFIG_LSM`); `02-kernel.sh` gates on this at every build and `90-verify.sh` re-checks it. Boot-time confirmation (`grep /boot/config-$(uname -r)`) still pending first hardware boot.
+- `kernel-p03-nvidia-open` modules must run under enforcing SELinux: the negativo17 **`nvidia-driver-selinux`** policy package is installed in `02-kernel.sh` (device-node rules for enforcing systems). Boot-time VERIFY (`enforcing=1`, `ausearch -m avc` for module-loading denials) pending first hardware boot; interim fix if denials appear is a small local policy module (`audit2allow`), full policy work deferred.
+- The image keeps the Fedora `targeted` policy unchanged; `setroubleshoot` packages already in the recipe remain. (Note: rakuos-base takes the opposite route — it strips `selinux-policy*` entirely and ships AppArmor; halcyon deliberately does **not** copy that.)
 
 ### 4.5 Handheld / hardware note
 
@@ -618,7 +621,7 @@ Every flip is one commit: reverting it restores the previous source (COPR/vendor
 | TickTick Linux download URL + version detection | inspect `https://ticktick.com/about/download` |
 | OnlyOffice repo file freshness | `curl -s https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice.repo` |
 | DistroShelf build system (Flutter vs Meson) | inspect `github.com/ranfdev/DistroShelf` build files |
-| p03 kernel config keeps SELinux | `grep CONFIG_SECURITY_SELINUX /boot/config-$(uname -r)` after first p03 boot |
+| p03 kernel config keeps SELinux | **✓ verified 2026-09-19** — `CONFIG_SECURITY_SELINUX=y` in the 7.2.6.p03.32 config; now a build-time gate in `02-kernel.sh` |
 | nwg-look / eza / starship / uv / yazi / tealdeer / atuin / dust Fedora presence | `dnf repoquery <name>` on F44 |
 
 ## 12. References

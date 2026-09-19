@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# halcyon build stage 2 — prune the Bazzite GNOME/desktop set
-# (equivalent of the old removals.yml Step B + guarded-removals + footprint)
+# halcyon build stage 3 — prune what fedora-bootc ships that halcyon rejects
+# (MIGRATION §9: the BlueBuild-era removals.yml set is mostly obsolete on the
+# bootc base — no GNOME, no Bazzite; only the trimmed removal list remains.
+# The guarded scripts below no-op safely when their targets are absent.)
 set -euo pipefail
-echo "::group::02-prune — GNOME removal (removals.yml Step B)"
-dnf5 -y --allowerasing remove \
-  nautilus-gsconnect gnome-shell-extension-gsconnect gnome-shell-extension-user-theme \
-  gnome-search-yafti gnome-rounded-blur firewall-config \
-  ibus-mozc ibus-pinyin ibus-table-chinese-cangjie ibus-table-chinese-quick \
-  inputplumber steamos-manager-powerstation jupiter-fan-control jupiter-hw-support-btrfs \
-  galileo-mura steamdeck-dsp powerbuttond vpower sdgyrodsu hid-replay \
-  steamdeck-backgrounds steamdeck-gnome-presets \
-  waydroid fastfetch \
-  firefox firefox-langpacks \
-  gnome-shell mutter gdm gnome-session gnome-session-wayland-session nautilus ptyxis \
-  gnome-control-center gnome-settings-daemon gjs xdg-desktop-portal-gnome
-dnf5 -y autoremove
+echo "::group::02-prune — bootc-base trim"
+# zram-generator-defaults: halcyon manages swap differently (Bazzite-era
+# removal, kept per removals.yml); nano-default-editor: replaced by helix/neovim.
+# --no-autoremove must follow the remove command keyword (dnf5 CLI).
+PKGS_TO_REMOVE=()
+for pkg in nano nano-default-editor zram-generator-defaults; do
+  rpm -q "${pkg}" >/dev/null 2>&1 && PKGS_TO_REMOVE+=("${pkg}")
+done
+if [ "${#PKGS_TO_REMOVE[@]}" -gt 0 ]; then
+  dnf5 -y remove --no-autoremove "${PKGS_TO_REMOVE[@]}"
+fi
+dnf5 -y autoremove || true
 echo "::endgroup::"
 echo "::group::02-prune — guarded removals + footprint (existing scripts)"
 bash /tmp/build.d/scripts/guarded-removals.sh

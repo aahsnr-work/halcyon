@@ -16,6 +16,16 @@ dnf5 -y install accountsservice bleachbit bluez-tools brightnessctl cargo cmake 
   zathura zathura-pdf-poppler zathura-plugins-all zsh grim go pymol fastfetch \
   fonts-filesystem setroubleshoot-plugins xorg-x11-xauth setroubleshoot-server setools-console udica \
   jetbrains-mono-fonts google-noto-emoji-fonts just || true
+# --- hardware support the Bazzite base used to provide (fedora-bootc is bare;
+# rakuos-base build.sh installs the same classes explicitly) ---
+dnf5 -y install linux-firmware microcode_ctl amd-ucode-firmware amd-gpu-firmware \
+  intel-gpu-firmware nvidia-gpu-firmware atheros-firmware realtek-firmware \
+  iwlwifi-dvm-firmware iwlwifi-mvm-firmware \
+  alsa-firmware alsa-sof-firmware alsa-ucm \
+  NetworkManager-wifi wpa_supplicant \
+  pipewire pipewire-alsa pipewire-pulseaudio wireplumber \
+  mesa-dri-drivers mesa-vulkan-drivers mesa-libEGL mesa-libGL \
+  mesa-dri-drivers.i686 mesa-vulkan-drivers.i686 mesa-libEGL.i686 mesa-libGL.i686
 # --- desktop stack (lionheartp COPR; MIGRATION §8.4) ---
 dnf5 -y install cliphist hyprland-git hyprland-guiutils hyprpwcenter hyprshutdown \
   noctalia-git noctalia-greeter-git nwg-look qt6ct xdg-desktop-portal-hyprland \

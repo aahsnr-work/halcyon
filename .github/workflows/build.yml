@@ -18,16 +18,24 @@ jobs:
       packages: write
       id-token: write
     steps:
-      # Copr's download CDN intermittently 504s on repodata; poll until it
-      # answers 200 (up to ~30 min) — still consumed during the transition.
+      # Copr's download CDN intermittently 504s on repodata; poll until every
+      # consumed COPR answers 200 (up to ~30 min) — consumed during the
+      # transition (Hyprland/zen/desktop) AND for the p03 kernel (Stage K1).
       - name: Wait for Copr metadata availability
         run: |
           set -euo pipefail
-          URL="https://download.copr.fedorainfracloud.org/results/lionheartp/Hyprland/fedora-44-x86_64/repodata/repomd.xml"
+          URLS=(
+            "https://download.copr.fedorainfracloud.org/results/lionheartp/Hyprland/fedora-44-x86_64/repodata/repomd.xml"
+            "https://download.copr.fedorainfracloud.org/results/catpieleaf/kernel-p03/fedora-44-x86_64/repodata/repomd.xml"
+          )
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || true)
-            echo "attempt ${i}: HTTP ${code}"
-            [ "$code" = "200" ] && exit 0
+            ok=1
+            for URL in "${URLS[@]}"; do
+              code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || true)
+              echo "attempt ${i}: HTTP ${code}  ${URL}"
+              [ "$code" = "200" ] || ok=0
+            done
+            [ "$ok" = "1" ] && exit 0
             sleep 60
           done
           echo "::error::Copr metadata still unavailable after 30 attempts — re-run later."

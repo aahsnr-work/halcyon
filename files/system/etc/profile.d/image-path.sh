@@ -1,11 +1,8 @@
 # shellcheck shell=sh
 # halcyon image-path.sh — add helper scripts to PATH for all POSIX login/interactive shells.
 #
-# NOTE: Homebrew PATH is already handled for interactive shells by the base Bazzite
-# /etc/profile.d/brew.sh (from ublue-os/brew), which appends brew *after* system
-# paths to preserve system-binary priority (dbus etc.). We only add the
-# halcyon helper scripts directory here; do not duplicate or pre-empt brew's own
-# PATH management to avoid breakage.
+# Homebrew is retired from the image (MIGRATION.md §8.7 — replaced by monorepo
+# RPMs); only the halcyon helper scripts directory is added here.
 case ":${PATH}:" in
   *:/usr/libexec/halcyon-image:*) ;;
   *) export PATH="${PATH}:/usr/libexec/halcyon-image" ;;

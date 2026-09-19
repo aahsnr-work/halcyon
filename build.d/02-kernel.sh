@@ -1,46 +1,101 @@
 #!/usr/bin/env bash
-# halcyon build stage 2 — kernel + NVIDIA via the ublue akmods pattern
-# (MIGRATION.md §4.2 deviation: p03 deferred; stock Fedora kernel at the
-# akmods-pinned version + prebuilt nvidia-open modules from
-# ghcr.io/ublue-os/akmods{,-nvidia-open}:main-44)
+# halcyon build stage 2 — p03 kernel + NVIDIA open (MIGRATION.md §4.2 Stage K1)
+#
+# Kernel + prebuilt nvidia-open modules: COPR catpieleaf/kernel-p03
+# (ABI-matched by the COPR; Stage K2 transfers the build to halcyon-packages).
+# NVIDIA userland: negativo17 — the only repo on the 615.71.09 driver line the
+# COPR modules were built for. Four negativo17 subpackages are dependency-
+# entangled with a kmod package and can NOT be installed alongside the COPR's
+# prebuilt modules (verified 2026-09-19 against the repo metadata):
+#   nvidia-driver (meta)  -> requires nvidia-kmod-common
+#   nvidia-driver-cuda    -> requires nvidia-kmod-common
+#   nvidia-settings       -> requires nvidia-driver (the meta)
+#   nvidia-kmod-common    -> requires nvidia-kmod (only provider: dkms-nvidia,
+#                            which Conflicts with kernel-p03-nvidia-open)
+# RPM Fusion is equally unusable: userland 595.58.03 (version mismatch) and
+# xorg-x11-drv-nvidia hard-requires nvidia-kmod/akmod-nvidia too.
+# Therefore: install the clean leaf RPMs, and payload-extract the three
+# entangled subpackages file-only via rpm2cpio (GSP firmware, modprobe/udev/
+# dracut confs, nvidia-smi, OpenCL ICD) — no rpmdb entry, no dependency chain.
+# rakuos-base solves the same conflict by DKMS-building dkms-nvidia against
+# its own kernel — that is our K2 fallback if the versions ever drift; the
+# 90-verify.sh gate fails the build on userland/module version mismatch.
+#
+# Install mechanics follow rakuos-base (build_files/{build,nvidia}.sh):
+# RPM %post scriptlets fail in containers, so install with
+# tsflags=noscripts, then depmod + dracut explicitly.
 set -euo pipefail
-echo "::group::02-kernel — remove stock kernel, install akmods-pinned kernel + nvidia"
-for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
-  rpm --erase "$pkg" --nodeps || true
+echo "::group::02-kernel — p03 kernel + nvidia-open (Stage K1)"
+
+# --- stock Fedora kernel out (rakuos-base pattern: --no-autoremove, then
+# wipe the module trees so nothing stale is left behind). Only pass packages
+# that are actually installed — dnf5 aborts the whole transaction on any
+# absent argument, which would strand the stock kernel.
+STOCK_KERNEL=()
+for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra \
+           kernel-tools kernel-tools-libs; do
+  rpm -q "${pkg}" >/dev/null 2>&1 && STOCK_KERNEL+=("${pkg}")
 done
+if [ "${#STOCK_KERNEL[@]}" -gt 0 ]; then
+  # --no-autoremove must follow the remove command keyword (dnf5 CLI)
+  dnf5 -y remove --no-autoremove "${STOCK_KERNEL[@]}"
+fi
+rm -rf /boot/* /usr/lib/modules/* /lib/modules/*
 
-KERNEL_VERSION="$(find /tmp/kernel-rpms/kernel-core-*.rpm -prune -printf "%f\n" | sed 's/kernel-core-//g;s/.rpm//g')"
-echo "  INFO  akmods-pinned kernel version: ${KERNEL_VERSION}"
+# --- p03 kernel + prebuilt nvidia-open modules (x86-64-v3 builds; the -gcc
+# v2 fallback and kernel-p03-gcc-nvidia-open exist in the same COPR)
+dnf5 -y --setopt=tsflags=noscripts install kernel-p03 kernel-p03-nvidia-open
 
-# shim kernel-install plugins (05-rpmostree/50-dracut error during bootc builds)
-cd /usr/lib/kernel/install.d \
-  && mv 05-rpmostree.install 05-rpmostree.install.bak \
-  && mv 50-dracut.install 50-dracut.install.bak \
-  && printf '%s\n' '#!/bin/sh' 'exit 0' > 05-rpmostree.install \
-  && printf '%s\n' '#!/bin/sh' 'exit 0' > 50-dracut.install \
-  && chmod +x 05-rpmostree.install 50-dracut.install
+# --- NVIDIA userland from negativo17 (clean leaf packages only — see header).
+# 32-bit libs for Steam/Proton, CUDA libs for NVENC/DLSS, VA-API bridge.
+dnf5 -y --setopt=tsflags=noscripts install \
+  nvidia-driver-libs nvidia-driver-libs.i686 \
+  nvidia-driver-cuda-libs nvidia-driver-cuda-libs.i686 \
+  nvidia-modprobe nvidia-persistenced \
+  nvidia-libXNVCtrl libva-nvidia-driver
 
-KERNEL_RPMS=(
-  "/tmp/kernel-rpms/kernel-${KERNEL_VERSION}.rpm"
-  "/tmp/kernel-rpms/kernel-core-${KERNEL_VERSION}.rpm"
-  "/tmp/kernel-rpms/kernel-modules-${KERNEL_VERSION}.rpm"
-  "/tmp/kernel-rpms/kernel-modules-core-${KERNEL_VERSION}.rpm"
-  "/tmp/kernel-rpms/kernel-modules-extra-${KERNEL_VERSION}.rpm"
-)
-dnf5 -y install "${KERNEL_RPMS[@]}" /tmp/akmods-rpms/*.rpm
+# --- SELinux policy module for the NVIDIA device nodes (halcyon runs
+# enforcing — MIGRATION §4.4). The package %post skips `semodule` when
+# selinuxenabled is false — always true in a build container — so link it
+# into the image's policy store explicitly.
+dnf5 -y install nvidia-driver-selinux
+semodule -i /usr/share/selinux/packages/targeted/nvidia-driver.pp.bz2
 
-# restore kernel-install plugins
-cd /usr/lib/kernel/install.d \
-  && mv -f 05-rpmostree.install.bak 05-rpmostree.install \
-  && mv -f 50-dracut.install.bak 50-dracut.install
-cd -
+# --- dependency-entangled subpackages: payload-extract without rpmdb entry
+# (nvidia-kmod-common: GSP firmware + modprobe/udev/dracut confs;
+#  nvidia-driver-cuda: nvidia-smi/MPS/debugdump + OpenCL ICD;
+#  nvidia-settings: nvidia-settings GUI + libXNVCtrl + lib64 GUI libs)
+# Verified against the repo filelists: none of these payload paths collide
+# with RPM-owned files (Fedora's nvidia-gpu-firmware does not ship the
+# 615.71.09 GSP blobs).
+dnf5 -y install cpio
+mkdir -p /tmp/nkc
+( cd /tmp/nkc && dnf5 -y download nvidia-kmod-common nvidia-driver-cuda nvidia-settings )
+for rpm in /tmp/nkc/nvidia-kmod-common-*.noarch.rpm \
+           /tmp/nkc/nvidia-driver-cuda-*.x86_64.rpm \
+           /tmp/nkc/nvidia-settings-*.x86_64.rpm; do
+  rpm2cpio "$rpm" | cpio -idmu --quiet -D /tmp/nkc
+done
+rm -rf /tmp/nkc/usr/lib/.build-id /tmp/nkc/usr/lib64/.build-id
+cp -a /tmp/nkc/etc/. /etc/
+cp -a /tmp/nkc/usr/. /usr/
+chmod 0644 /usr/lib/modprobe.d/nvidia.conf /usr/lib/udev/rules.d/60-nvidia.rules
+rm -rf /tmp/nkc
 
-# versionlock the kernel to the akmods-pinned version
-dnf5 versionlock add kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
+KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-p03)"
+echo "  INFO  p03 kernel: ${KVER}"
 
-# initramfs for the pinned kernel
-export DRACUT_NO_XATTR=1
-dracut --no-hostonly --kver "${KERNEL_VERSION}" --reproducible -v --add ostree -f \
-  "/lib/modules/${KERNEL_VERSION}/initramfs.img" >/dev/null
-chmod 0600 "/lib/modules/${KERNEL_VERSION}/initramfs.img"
+# VERIFY (MIGRATION §4.4): p03 is Fedora-SRPM-derived and must keep SELinux
+grep -q '^CONFIG_SECURITY_SELINUX=y' "/usr/lib/modules/${KVER}/config" || {
+  echo "  FAIL  CONFIG_SECURITY_SELINUX is not =y in the p03 kernel config"
+  exit 1
+}
+
+# --- module deps (scriptlets were skipped above). The initramfs is NOT built
+# here: dracut runs in 70-initramfs.sh after all packages and the plymouth
+# theme exist (rakuos-base generates its initramfs last for the same reason —
+# the BlueBuild build did it with an initramfs module after branding.yml).
+depmod "${KVER}"
+
+echo "  INFO  nvidia userland: $(rpm -q --qf '%{VERSION}' nvidia-driver-libs) (modules: $(rpm -q --qf '%{VERSION}' kernel-p03-nvidia-open))"
 echo "::endgroup::"
