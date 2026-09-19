@@ -2,147 +2,54 @@
 # halcyon build step — install-packages (core + desktop + gaming + apps)
 # Policy: --setopt=install_weak_deps=False on EVERY install; anything that
 # used to arrive as a weak dep must be listed explicitly (e.g. flatpak-selinux
-# in 21-flatpak-setup.sh, hyprland-guiutils/xdg portals below).
-# One package per line for reviewability.
+# in setup-flatpaks, hyprland-guiutils/xdg portals below).
+# Package LISTS live in build_files/packages.json — this stage owns the
+# repo windows and flags only.
 set -euo pipefail
 source /ctx/packages-lib
 packages_validate
 echo "::group::install-packages — core + desktop + gaming + apps"
-# Package LISTS live in build_files/packages.json (single source of truth);
-# this stage owns the repo windows and flags. The comps group stays here —
-# comps groups are not catalog entries.
+
+# --- core set (main core.yml parity; Fedora repos) ---
+# The @custom-environment comps group stays here — comps groups are not
+# catalog entries in packages.json.
 dnf5 -y --setopt=install_weak_deps=False group-install \
   custom-environment \
   || true
 readarray -t CORE_PKGS < <(packages_for fedora-core)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${CORE_PKGS[@]}"
-  adw-gtk3 \
-  bleachbit \
-  bluez \
-  bluez-libs \
-  bluez-tools \
-  brightnessctl \
-  cargo \
-  cmake \
-  cronie \
-  curl \
-  ddcutil \
-  distrobox \
-  fail2ban \
-  fastfetch \
-  file-roller \
-  flatseal \
-  fontconfig \
-  fonts-filesystem \
-  gcc-c++ \
-  git \
-  go \
-  grim \
-  gsettings-desktop-schemas \
-  gtk4-layer-shell \
-  gzip \
-  hunspell \
-  hunspell-en \
-  hunspell-en-GB \
-  hunspell-en-US \
-  ImageMagick \
-  imv \
-  inotify-tools \
-  jetbrains-mono-fonts \
-  google-noto-emoji-fonts \
-  google-noto-color-emoji-fonts \
-  just \
-  liberation-fonts \
-  libinput-utils \
-  logrotate \
-  lynis \
-  man-db \
-  mpv \
-  ninja-build \
-  pipx \
-  pkgconf-pkg-config \
-  plymouth \
-  plymouth-theme-spinner \
-  podman \
-  podman-sequoia \
-  policycoreutils-python-utils \
-  pymol \
-  python3-xlib \
-  qt5ct \
-  setroubleshoot-server \
-  setroubleshoot-plugins \
-  setools-console \
-  slurp \
-  sqlite \
-  swappy \
-  transmission-gtk \
-  udica \
-  udiskie \
-  xdg-desktop-portal \
-  xdg-user-dirs \
-  xdg-user-dirs-gtk \
-  xorg-x11-server-Xorg \
-  xorg-x11-server-Xwayland \
-  xorg-x11-xauth \
-  zathura \
-  zathura-pdf-poppler \
-  zathura-plugins-all \
-  zsh
+
 # --- hardware support the Bazzite base used to provide (fedora-bootc is
 # bare; rakuos-base installs the same classes explicitly) ---
 readarray -t HW_PKGS < <(packages_for fedora-hardware)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${HW_PKGS[@]}"
-  microcode_ctl \
-  amd-ucode-firmware \
-  amd-gpu-firmware \
-  intel-gpu-firmware \
-  nvidia-gpu-firmware \
-  atheros-firmware \
-  realtek-firmware \
-  iwlwifi-dvm-firmware \
-  iwlwifi-mvm-firmware \
-  alsa-firmware \
-  alsa-sof-firmware \
-  alsa-ucm \
-  NetworkManager-wifi \
-  wpa_supplicant \
-  pipewire \
-  pipewire-alsa \
-  pipewire-pulseaudio \
-  wireplumber \
-  pcsc-lite \
-  pcsc-lite-ccid \
-  mesa-dri-drivers \
-  mesa-vulkan-drivers \
-  mesa-libEGL \
-  mesa-libGL \
-  mesa-dri-drivers.i686 \
-  mesa-vulkan-drivers.i686 \
-  mesa-libEGL.i686 \
-  mesa-libGL.i686
+
 # --- desktop stack: lionheartp COPR per-use. NOTE: weak deps are OFF, so
-# every Hyprland-stack weak dep we rely on must be listed here explicitly
-# (hyprland-guiutils, xdg-desktop-portal-{hyprland,gtk}, qt6ct, nwg-look).
+# every Hyprland-stack weak dep we rely on must be listed in the group
+# explicitly (hyprland-guiutils, xdg-desktop-portal-{hyprland,gtk}, ...).
 dnf5 -y copr enable lionheartp/Hyprland
 readarray -t HYPRLAND_PKGS < <(packages_for hyprland-copr)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${HYPRLAND_PKGS[@]}"
 dnf5 -y copr disable lionheartp/Hyprland
-# --- gaming (RPM Fusion + Fedora; terra bits live in 11-terra.sh).
+
+# --- gaming (RPM Fusion + Fedora; terra bits live in install-terra).
 # gamescope + mangohud come from Fedora now (terra-gamescope/-mangohud were
 # retired upstream — verified live 2026-09-19); mangohud.i686 covers 32-bit
 # overlays for Steam/Proton.
 readarray -t GAMING_PKGS < <(packages_for gaming)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${GAMING_PKGS[@]}"
+
 # --- bazaar: ublue COPR per-use ---
 dnf5 -y copr enable ublue-os/packages
 readarray -t BAZAAR_PKGS < <(packages_for bazaar-copr)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${BAZAAR_PKGS[@]}"
 dnf5 -y copr disable ublue-os/packages
+
 # --- apps: zen-browser (sneexy COPR per-use), vscode/brave (vendor repos
 # per-use: written, used, disabled and deleted inside this stage) ---
 dnf5 -y copr enable sneexy/zen-browser

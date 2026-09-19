@@ -242,6 +242,12 @@ that is the build-time smoke test.
 - **`rpm -q` is case-sensitive** while dnf is not: the Fedora package is
   `Thunar` (capital T) — `dnf install thunar` succeeds and `rpm -q thunar`
   fails. Query gates with the exact upstream name.
+- **bash -n cannot catch orphaned package lists.** When converting a
+  hardcoded install list to packages.json readarray form, the old list can
+  survive as bare continuation lines after `"${PKGS[@]}"` — syntactically
+  valid (bash -n passes) but each line then executes as a COMMAND at build
+  time (`adw-gtk3: command not found`, exit 127). After any list refactor:
+  grep for indented lines immediately following a `"${VAR[@]}"` expansion.
 - **`just --list` does not parse recipe bodies.** Recipe-body syntax is
   covered by `just check` (bash -n) — extend that check, don't trust
   `--list`, and run `just --show <recipe>` when editing a recipe.
