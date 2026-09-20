@@ -12,6 +12,10 @@
 # that level. Removals run FIRST (remove-packages) — main's removals.yml
 # ordering — so dnf computes the removal set on the smallest, pristine graph;
 # keeper packages are gated against the FINAL state in final-verify.
+#
+# Every stage RUN opens with a "████ STAGE nn/17 · name · summary ████" banner
+# so a human scrolling a CI log can find stage boundaries instantly; the build
+# scripts themselves emit ::group:: folds + OK/FAIL prefixes inside each stage.
 
 ARG FEDORA_VERSION=44
 
@@ -19,6 +23,8 @@ ARG FEDORA_VERSION=44
 FROM scratch AS ctx
 COPY build_files /
 COPY packages.json /
+# cosign.pub is consumed by the branding stage (sigstore policy assets)
+COPY cosign.pub /
 
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 
@@ -47,7 +53,8 @@ COPY system_files/shared/ /
 # Copr 504s during the very stages that follow (libdnf5 reads
 # /etc/dnf/libdnf5.conf.d/ before the main config).
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    install -Dm0644 /ctx/libdnf5.conf.d/99-halcyon-retries.conf \
+    echo "████ STAGE 00/17 · dnf5 patience drop-in ████" \
+    && install -Dm0644 /ctx/libdnf5.conf.d/99-halcyon-retries.conf \
       /etc/dnf/libdnf5.conf.d/99-halcyon-retries.conf
 
 # ---- Stage 1: shared external repos + jq bootstrap (packages.json consumer)
@@ -56,73 +63,98 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
 # pristine graph the removals run against.
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/base/setup-repos && /ctx/cleanup
+    echo "████ STAGE 01/17 · setup-repos · base external repos ████" \
+    && /ctx/base/setup-repos && /ctx/cleanup
 
 # ---- Stage 2: removals on the near-pristine base (JSON-driven, main ordering)
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/base/remove-packages && /ctx/cleanup
+    echo "████ STAGE 02/17 · remove-packages · removals on pristine base ████" \
+    && /ctx/base/remove-packages && /ctx/cleanup
 
 # ---- Stage 3: p03 kernel + prebuilt nvidia-open modules (Stage K1) ---------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/kernel/install-kernel && /ctx/cleanup
+    echo "████ STAGE 03/17 · install-kernel · p03 + nvidia-open (Stage K1) ████" \
+    && /ctx/kernel/install-kernel && /ctx/cleanup
 
 # ---- Stage 4: core + desktop + gaming + apps -------------------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/packages/install-packages && /ctx/packages/packages-verify && /ctx/cleanup
+    echo "████ STAGE 04/17 · install-packages · core + desktop + gaming + apps ████" \
+    && /ctx/packages/install-packages && /ctx/packages/packages-verify && /ctx/cleanup
 
 # ---- Stage 5: Terra packages (user-editable list, exclusive resolution) ----
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/packages/install-terra && /ctx/cleanup
+    echo "████ STAGE 05/17 · install-terra · Terra-only resolution ████" \
+    && /ctx/packages/install-terra && /ctx/cleanup
 
 # ---- Stage 6: devtools (Fedora brew-formula replacements) ------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/packages/install-devtools && /ctx/cleanup
+    echo "████ STAGE 06/17 · install-devtools · Fedora devtools ████" \
+    && /ctx/packages/install-devtools && /ctx/cleanup
 
-# ---- Stage 7: nix (winter pattern) ------------------------------------------
-RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
-    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/runtime/install-nix && /ctx/runtime/nix-verify && /ctx/cleanup
-
-# ---- Stage 8: flatpak (flathub USER repo only) ------------------------------
-RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
-    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/runtime/setup-flatpaks && /ctx/runtime/flatpaks-verify && /ctx/cleanup
-
-# ---- Stage 9: built apps (obsidian/zotero/pyprland/texlive/python) ---------
-RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
-    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/apps/install-built-apps && /ctx/apps/built-apps-verify && /ctx/cleanup
-
-# ---- Stage 10: ujust machinery (ublue-os-just) + uupd -----------------------
-RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
-    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/runtime/setup-ujust && /ctx/runtime/ujust-verify && /ctx/cleanup
-
-# ---- Stage 11: system config (services, tmpfiles, chezmoi wiring) ----------
+# ---- Stage 7: Homebrew (core + Brewfile formulas BAKED into a /usr payload;
+#      halcyon-brew-bundle.service seeds it pre-login at boot) ---------------
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/desktop/configure-system && /ctx/desktop/system-verify && /ctx/cleanup
+    echo "████ STAGE 07/17 · install-brew-bundle · Homebrew bake ████" \
+    && /ctx/brew/install-brew-bundle && /ctx/brew/brew-verify && /ctx/cleanup
 
-# ---- Stage 12: branding (os-release identity + plymouth theme) --------------
-RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/desktop/image-info && /ctx/desktop/branding-verify && /ctx/cleanup
-
-# ---- Stage 13: initramfs LAST (plymouth theme + nvidia hooks baked in) ------
+# ---- Stage 8: nix (winter pattern) ------------------------------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/finish/build-initramfs && /ctx/cleanup
+    echo "████ STAGE 08/17 · install-nix · winter pattern ████" \
+    && /ctx/runtime/install-nix && /ctx/runtime/nix-verify && /ctx/cleanup
 
-# ---- Stage 14: finalize (repo sweep + end-of-build hygiene) -----------------
-RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/finish/finalize
+# ---- Stage 9: flatpak (flathub USER repo only) ------------------------------
+RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
+    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 09/17 · setup-flatpaks · flathub user repo ████" \
+    && /ctx/runtime/setup-flatpaks && /ctx/runtime/flatpaks-verify && /ctx/cleanup
 
-# ---- Stage 15: final cross-cutting verification ------------------------------
+# ---- Stage 10: built apps (obsidian/zotero/pyprland/texlive/python) --------
+RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
+    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 10/17 · install-built-apps · obsidian/zotero/pyprland/texlive/python ████" \
+    && /ctx/apps/install-built-apps && /ctx/apps/built-apps-verify && /ctx/cleanup
+
+# ---- Stage 11: ujust machinery (ublue-os-just) + uupd -----------------------
+RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
+    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 11/17 · setup-ujust · ublue-os-just + uupd ████" \
+    && /ctx/runtime/setup-ujust && /ctx/runtime/ujust-verify && /ctx/cleanup
+
+# ---- Stage 12: system config (services, tmpfiles, chezmoi + brew wiring) ----
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    /ctx/finish/final-verify
+    echo "████ STAGE 12/17 · configure-system · units + services ████" \
+    && /ctx/desktop/configure-system && /ctx/desktop/system-verify && /ctx/cleanup
+
+# ---- Stage 13: branding (os-release identity + plymouth theme) --------------
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 13/17 · image-info · os-release + plymouth ████" \
+    && /ctx/desktop/image-info && /ctx/desktop/branding-verify && /ctx/cleanup
+
+# ---- Stage 14: initramfs LAST (plymouth theme + nvidia hooks baked in) ------
+RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
+    --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 14/17 · build-initramfs · dracut for p03 ████" \
+    && /ctx/finish/build-initramfs && /ctx/cleanup
+
+# ---- Stage 15: finalize (repo sweep + end-of-build hygiene) -----------------
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 15/17 · finalize · repo sweep + hygiene ████" \
+    && /ctx/finish/finalize
+
+# ---- Stage 16: final cross-cutting verification ------------------------------
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
+    echo "████ STAGE 16/17 · final-verify · cross-cutting gates ████" \
+    && /ctx/finish/final-verify
 
 # ---- Final gate: hermetic bootc lint (bazzite pattern) -----------------------
-RUN --mount=type=tmpfs,target=/run --network=none ["bootc","container","lint"]
+# shell form here (not exec form) so the banner echo can share the RUN; bootc
+# lint is short-lived so shell signal semantics are irrelevant.
+RUN --mount=type=tmpfs,target=/run --network=none \
+    echo "████ STAGE 17/17 · bootc container lint · hermetic final gate ████" \
+    && bootc container lint

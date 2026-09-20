@@ -23,13 +23,24 @@ jobs:
   build_push:
     name: Build and push image
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: read
       packages: write
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      # Colored stage banners for every step below. GitHub's log viewer
+      # renders the ANSI escapes in .github/log-helpers.sh, giving each stage
+      # a distinct visual block while scrolling the build log.
+      - name: Log helpers
+        run: |
+          source .github/log-helpers.sh
+          banner "halcyon build — run ${GITHUB_RUN_ID} on ${GITHUB_REF_NAME}"
+          step "event: ${GITHUB_EVENT_NAME}; sha: ${GITHUB_SHA::7}"
+          step "actions cache/runner ready"
 
       # Copr's download CDN intermittently 504s on repodata; poll until every
       # consumed COPR answers 200 (up to ~30 min) — consumed during the
@@ -37,6 +48,9 @@ jobs:
       - name: Wait for Copr metadata availability
         run: |
           set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 1/6 — Copr metadata availability"
+          echo "::group::Polling consumed COPRs (up to 30 attempts × 60s)"
           URLS=(
             "https://download.copr.fedorainfracloud.org/results/lionheartp/Hyprland/fedora-44-x86_64/repodata/repomd.xml"
              "https://download.copr.fedorainfracloud.org/results/catpieleaf/kernel-p03/fedora-44-x86_64/repodata/repomd.xml"
@@ -44,52 +58,92 @@ jobs:
             "https://download.copr.fedorainfracloud.org/results/sneexy/zen-browser/fedora-44-x86_64/repodata/repomd.xml"
           )
           for i in $(seq 1 30); do
-            ok=1
+            ok_all=1
             for URL in "${URLS[@]}"; do
               code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || true)
-              echo "attempt ${i}: HTTP ${code}  ${URL}"
-              [ "$code" = "200" ] || ok=0
+              if [ "$code" = "200" ]; then
+                printf '%s\n' "${H_GRN}  ✔ HTTP ${code}  ${URL}${H_RESET}"
+              else
+                printf '%s\n' "${H_YLW}  ⚠ HTTP ${code}  ${URL}${H_RESET}"
+                ok_all=0
+              fi
             done
-            [ "$ok" = "1" ] && exit 0
+            [ "$ok_all" = "1" ] && { ok "all Copr repodata reachable (attempt ${i})"; echo "::endgroup::"; exit 0; }
+            step "attempt ${i}/30 not all green — sleeping 60s"
             sleep 60
           done
-          echo "::error::Copr metadata still unavailable after 30 attempts — re-run later."
-          exit 1
+          echo "::endgroup::"
+          die "Copr metadata still unavailable after 30 attempts — re-run later."
 
-      - name: Maximize build space
+      - name: Report build space (before)
+        run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 2/6 — Maximize build space"
+          step "before:"
+          df -h / /mnt | sed 's/^/      /'
+
+      - name: Remove unwanted software
         uses: ublue-os/remove-unwanted-software@v9
 
+      - name: Report freed space (after)
+        if: always()
+        run: |
+          source .github/log-helpers.sh
+          step "after:"
+          df -h / /mnt | sed 's/^/      /'
+
       - name: Install just
-        uses: extractions/setup-just@v2
+        uses: extractions/setup-just@v4
 
       - name: Check Just Syntax
-        run: just check
+        run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 3/6 — just check"
+          just check && ok "just check passed"
 
       - name: Image Name
         id: image-name
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 4/6 — Resolve image identity"
           IMAGE_NAME=$(just image_name)
+          ok "IMAGE_NAME=${IMAGE_NAME}"
           echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_ENV"
 
       - name: Default Tag
         id: gen-default-tag
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
           DEFAULT_TAG=$(just generate-default-tag)
+          ok "DEFAULT_TAG=${DEFAULT_TAG}"
           echo "DEFAULT_TAG=${DEFAULT_TAG}" >> "$GITHUB_ENV"
 
       - name: Prepare environment
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
           # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
+          ok "registry=${IMAGE_REGISTRY,,}  image=${IMAGE_NAME,,}"
 
       # This actually builds the container image
       - name: Build Image
         id: build-image
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 5/6 — podman build (all 17 stages)"
+          echo "::group::just build ${IMAGE_NAME} ${DEFAULT_TAG}"
           just build \
             "${IMAGE_NAME}" \
             "${DEFAULT_TAG}"
+          echo "::endgroup::"
+          ok "image built"
 
       # Distinctive package census: run the freshly built image and write the
       # report to the run summary (GITHUB_STEP_SUMMARY) plus a ::notice::
@@ -98,10 +152,13 @@ jobs:
       - name: Package count report
         run: |
           set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 6/6 — Package census + tags + push + sign"
           INFO=$(podman run --rm --entrypoint /bin/bash "${IMAGE_NAME}:${DEFAULT_TAG}" -c \
             'echo "count=$(rpm -qa | wc -l)"; echo "kernel=$(rpm -q --qf "%{VERSION}-%{RELEASE}.%{ARCH}" kernel-p03 2>/dev/null || echo n/a)"')
           COUNT=$(sed -n 's/^count=//p' <<< "$INFO")
           KVER=$(sed -n 's/^kernel=//p' <<< "$INFO")
+          ok "${COUNT} RPMs installed, p03 kernel ${KVER}"
           {
             echo "## 📦 halcyon image package report"
             echo ""
@@ -109,6 +166,7 @@ jobs:
             echo "|---|---|"
             echo "| **Total installed RPM packages** | **${COUNT}** |"
             echo "| p03 kernel | ${KVER} |"
+            echo "| Homebrew payload | $(podman run --rm --entrypoint /bin/bash "${IMAGE_NAME}:${DEFAULT_TAG}" -c 'du -h /usr/share/halcyon/brew-bundle.tar.zst 2>/dev/null | cut -f1 || echo n/a') |"
             echo "| Source | \`${IMAGE_REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=halcyon package count::${COUNT} RPMs installed (p03 kernel ${KVER})"
@@ -116,11 +174,13 @@ jobs:
       - name: Generate Build Tags
         id: gen-build-tags
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
           alias_tags="$(just generate-build-tags \
                         "${IMAGE_NAME}" \
                         "${DEFAULT_TAG}")"
-          echo "Tags for this Action..."
-          echo "${alias_tags}"
+          step "Tags for this run:"
+          for t in ${alias_tags}; do printf '%s\n' "${H_WHT}      🏷  ${t}${H_RESET}"; done
           echo "alias_tags=${alias_tags}" >> "$GITHUB_OUTPUT"
 
       - name: Tag Image
@@ -128,16 +188,19 @@ jobs:
         env:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
           just tag-images \
             "${IMAGE_NAME}" \
             "${DEFAULT_TAG}" \
             "${ALIAS_TAGS}"
+          ok "all alias tags applied"
 
       # Push + sign only on branch pushes (not PRs) — same semantics as the
       # BlueBuild era action had.
       - name: Login to GitHub Container Registry
         if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -150,16 +213,30 @@ jobs:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
         run: |
           set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Push to GHCR"
+          echo "::group::podman push (one tag at a time)"
           for tag in ${ALIAS_TAGS}; do
-            podman push --digestfile=/tmp/digestfile "${IMAGE_NAME}:${tag}" \
+            step "pushing ${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+            podman push --quiet --digestfile=/tmp/digestfile "${IMAGE_NAME}:${tag}" \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+            ok "pushed ${tag}"
           done
+          echo "::endgroup::"
           digest=$(< /tmp/digestfile)
+          ok "manifest digest: ${digest}"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## 🔖 Published tags"
+            echo ""
+            for tag in ${ALIAS_TAGS}; do echo "- \`${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}\`"; done
+            echo ""
+            echo "digest: \`${digest}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install Cosign
         if: github.event_name == 'push'
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v4
 
       # Sign the manifest digest once — every alias tag shares it.
       - name: Sign container image
@@ -169,5 +246,16 @@ jobs:
           COSIGN_PASSWORD: ""
           DIGEST: ${{ steps.push-image.outputs.digest }}
         run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Cosign sign"
           cosign sign --key env://COSIGN_PRIVATE_KEY --yes \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+          ok "signed ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+
+      - name: Done
+        if: always()
+        run: |
+          source .github/log-helpers.sh
+          banner "halcyon build finished"
+          step "conclusion: ${{ job.status }}"

@@ -39,9 +39,12 @@ echo "::endgroup::"
 echo "::group::guarded-removals — reverse-dep gates (sddm, cage)"
 for p in sddm cage; do
   if rpm -q "$p" >/dev/null 2>&1; then
+    # deliberate sed-style variable regex — ${p} is data-driven by design
+    # shellcheck disable=SC2001
     reqs="$(dnf5 -q repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
     if [ -n "${reqs}" ]; then
       echo "  GATE  keeping ${p} — required by:"
+      # shellcheck disable=SC2001  # indenting multi-line output, not a substitution
       echo "${reqs}" | sed 's/^/          /'
     else
       echo "  GATE  removing ${p} — nothing installed requires it"

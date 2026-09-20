@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
 # halcyon build step — install-devtools (Fedora brew-formula replacements)
-# Fedora RPMs (MIGRATION §8.7; the rest land via halcyon-packages later).
-# chezmoi comes from the official Fedora repo (2.72 in F44).
+# Fedora RPMs (MIGRATION §8.7). RPM copies keep PATH priority: the Homebrew
+# payload (build_files/brew, next stage) APPENDS its bin dirs via
+# environment.d + profile.d, so these RPMs win and brew only backfills what
+# Fedora does not ship (bun, pixi, opencode — see the brew/Brewfile).
+# chezmoi comes from the official Fedora repo (2.72 in F44) — blue-build
+# chezmoi module parity is provided by the systemd user units, not the
+# install source.
 set -euo pipefail
 echo "::group::install-devtools — brew-formula replacements (Fedora RPMs)"
 # NOTE: lazygit/starship/yazi/zellij are NOT in Fedora 44 (verified in the
-# 2026-09-19 CI-equivalent build) — all four come from Terra via 11-terra.sh
+# 2026-09-19 CI-equivalent build) — all four come from Terra via install-terra
 # (lazygit ships there under its Go name golang-github-jesseduffield-lazygit).
+# bun/pixi/opencode publish no Fedora RPMs — they arrive via the baked
+# Homebrew payload (build_files/brew/install-brew-bundle + Brewfile), which
+# is exactly how the main branch shipped them (brew.yml, 22 formulas).
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 readarray -t DEV_PKGS < <(packages_for fedora-devtools)
+echo "  INFO  installing ${#DEV_PKGS[@]} Fedora devtools: ${DEV_PKGS[*]}"
 dnf5 -y --setopt=install_weak_deps=False install \
   "${DEV_PKGS[@]}"
-# TODO(user): bun, pixi, opencode publish no Fedora RPMs — add their
-# upstream-binary wrapper installs HERE (monorepo type-B specs replace this
-# later). Pattern: resolve the latest release via the GitHub API, download
-# with --retry, verify the sha256 the release publishes, install to
-# /usr/local/bin. Upstreams:
-#   bun      https://github.com/oven-sh/bun/releases
-#   pixi     https://github.com/prefix-dev/pixi/releases
-#   opencode https://github.com/sst/opencode/releases
-# ---------------------------------------------------------------------------
+echo "  OK    devtools rpm-verified"
+for pkg in "${DEV_PKGS[@]}"; do
+  rpm -q "${pkg%%.i686}" >/dev/null 2>&1 || {
+    echo "  FAIL  devtools package not installed after transaction: ${pkg}"
+    exit 1
+  }
+done
+echo "::endgroup::"

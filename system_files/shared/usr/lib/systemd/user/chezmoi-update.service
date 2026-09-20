@@ -1,10 +1,10 @@
 [Unit]
-Description=Update halcyon dotfiles via chezmoi
-After=network-online.target
-Wants=network-online.target
-ConditionPathExists=%h/.local/share/chezmoi
+Description=Chezmoi Update
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/chezmoi update
+# blue-build chezmoi module with file-conflict-policy: replace (main's
+# recipes/modules/files.yml) → `--no-tty --force`; the dotfiles repo is the
+# source of truth.
+ExecStart=/usr/bin/chezmoi update --no-tty --force
 TimeoutStartSec=600

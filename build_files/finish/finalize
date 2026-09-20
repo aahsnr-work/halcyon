@@ -23,9 +23,11 @@ echo "::endgroup::"
 echo "::group::finalize — end-of-build hygiene (bazzite finalize pattern)"
 dnf5 config-manager setopt keepcache=0
 dnf5 config-manager setopt skip_if_unavailable=1
-rm -rf /tmp/* /tmp/.[!.]* /tmp/..?* || true
+find /tmp -mindepth 1 -delete 2>/dev/null || true
 rm -f /var/log/dnf5.log /var/log/dnf5.log.* || true
-rm -rf /boot/* /boot/.[!.]* /boot/..?* || true
+# find(1) instead of `rm -rf /boot/*` globs: identical end state (empty /boot),
+# no dotted-glob edge cases, and shellcheck-clean
+find /boot -mindepth 1 -delete 2>/dev/null || true
 rm -rf /var/cache/libdnf5/* || true
 rm -rf /var/tmp/* || true
 install -d -m1777 /var/tmp

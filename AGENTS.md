@@ -32,28 +32,11 @@ cosign.pub                 # public signing key (see §7 "signing gap")
 .containerignore           # keep docs/artifacts out of the build context
 
 build_files/               # the `ctx` stage — NEVER ends up in the image
-  packages.json            # SINGLE SOURCE OF TRUTH — root level, copied into ctx
-  packages-lib             # jq accessors (source it; see §6 "package catalog")
+  <verb>-<subject>         # extensionless bash: install-kernel, setup-repos, ...
+  <stage>-verify           # per-stage gate: packages-verify, nix-verify, ...
   cleanup                  # end-of-RUN hygiene, called after every mutating RUN
   libdnf5.conf.d/          # dnf5 main-config drop-in (see §7)
   python-packages/         # 11 stdlib-only src-layout Python tools
-  base/                    # repos + removals: setup-repos, remove-packages,
-                           #   guarded-removals, file-footprint, gnome-extensions,
-                           #   fonts-cleanup
-  kernel/                  # install-kernel (p03 + NVIDIA)
-  packages/                # install-packages + packages-verify, install-terra,
-                           #   install-devtools
-  apps/                    # install-built-apps + built-apps-verify and the
-                           #   per-app installers (obsidian, zotero, pyprland,
-                           #   texlive, python-packages)
-  runtime/                 # install-nix + nix-verify, setup-flatpaks +
-                           #   flatpaks-verify, setup-ujust + ujust-verify
-  desktop/                 # configure-system + system-verify, image-info,
-                           #   build-plymouth-assets + branding-verify
-  finish/                  # build-initramfs, finalize, final-verify
-
-Scripts are extensionless bash at `<folder>/<verb>-<subject>`; verify
-companions live next to the stage they gate inside the same folder.
 
 system_files/shared/       # static tree COPY'd to / BEFORE any RUN stage
   etc/…  usr/…             # units, profile.d, greetd, plymouth, ujust modules,
@@ -149,7 +132,7 @@ script costs a full ~40-minute CI build.
   matching `tmpfiles.d` entry triggers the `var-tmpfiles` lint warning, and
   anything you put there is only applied on *initial provisioning* — later
   upgrades will not see it. Create runtime state with `tmpfiles.d` (see
-  `usr/lib/tmpfiles.d/zz-halcyon-nix.conf`, `noctalia-greeter-state.conf`) or a oneshot
+  `usr/lib/tmpfiles.d/nix.conf`, `noctalia-greeter-state.conf`) or a oneshot
   unit (see `var-nix.service`).
 - `/var/run` must remain a symlink to `/run` — that lint is a hard failure.
 - `/boot` must be empty; the kernel lives in `/usr/lib/modules/<kver>/`.
@@ -161,19 +144,6 @@ script costs a full ~40-minute CI build.
 ---
 
 ## 6. Conventions by file type
-
-### Package catalog (`packages.json`)
-- Every dnf/flatpak package name lives in `packages.json` — groups map 1:1 to
-  stages (`fedora-core`, `fedora-hardware`, `hyprland-copr`, `gaming`,
-  `bazaar-copr`, `zen-copr`, `vendor-apps`(+`-optional`), `fedora-devtools`,
-  `nix`, `flatpak`, `ujust-copr`, `ujust-fedora`, `terra`),
-  plus `all.exclude.all` (removals) and `flatpak.install`/`flatpak.remove`.
-- Stages never hardcode package lists: `source /ctx/packages-lib`, then
-  `readarray -t PKGS < <(packages_for <group>)`. Terra resolves exclusively
-  (`--disablerepo='*'`); excludes are rpm-resolved (absent names tolerated).
-- Add a package = add a name to the right group. New repo needed = new group
-  + a repo window in the consuming stage. Run `jq empty packages.json`
-  — the build fails fast on malformed JSON by design.
 
 ### Build scripts (`build_files/*`)
 - `#!/usr/bin/env bash` + `set -euo pipefail` (use `set -uo pipefail` only when
@@ -235,55 +205,37 @@ that is the build-time smoke test.
 
 ## 7. Known traps (read before touching these areas)
 
-- **The `ctx` stage is FLAT.** `COPY build_files /` puts helpers at
-  `/ctx/<name>` (e.g. `/ctx/install-packages`, `/ctx/libdnf5.conf.d/…`) —
-  **not** `/ctx/build_files/<name>`. A nested path fails with
-  `install: cannot stat`.
-- **`rpm -q` is case-sensitive** while dnf is not: the Fedora package is
-  `Thunar` (capital T) — `dnf install thunar` succeeds and `rpm -q thunar`
-  fails. Query gates with the exact upstream name.
-- **Generated scripts: use quoted heredocs, not echo lines.** Building a
-  script with `echo "… $var …"` under `set -u` aborts on unbound positional
-  params (`$2` in awk snippets) and silently expands dollars you meant to
-  defer. Write the static body through a `<<'QUOTED'` heredoc and append
-  only the data-driven lines (see setup-flatpaks).
-- **bash -n cannot catch orphaned package lists.** When converting a
-  hardcoded install list to packages.json readarray form, the old list can
-  survive as bare continuation lines after `"${PKGS[@]}"` — syntactically
-  valid (bash -n passes) but each line then executes as a COMMAND at build
-  time (`adw-gtk3: command not found`, exit 127). After any list refactor:
-  grep for indented lines immediately following a `"${VAR[@]}"` expansion.
-- **`just --list` does not parse recipe bodies.** Recipe-body syntax is
-  covered by `just check` (bash -n) — extend that check, don't trust
-  `--list`, and run `just --show <recipe>` when editing a recipe.
 - **Verify gates must match what `systemctl enable` actually does.**
   `systemctl enable foo` in a container writes
   `/etc/systemd/system/<target>.wants/foo`, **not** `/usr/lib/systemd/...`.
   Gate with `systemctl is-enabled`, or test the `/etc` path.
 - **`install-pyprland`**: upstream *does* ship `systemd-unit/pyprland.service`,
-  so the `else` branch (inline unit) never runs. Anything that must apply to
-  both paths (the `ConditionEnvironment` drop-in) lives **outside** that `if`.
+  so the `else` branch never runs. Anything that must apply to both the upstream
+  and inline unit (the `ConditionEnvironment` drop-in) has to live **outside**
+  that `if`.
 - **`ConditionEnvironment=` on a user unit** reads the *systemd user manager's*
   environment. It only works if the session exports `XDG_CURRENT_DESKTOP` into
   it (`dbus-update-activation-environment --systemd` / `systemctl --user
   import-environment`). Verify in the Hyprland config, not just in the unit.
-- **Signing**: `ostree-image-signed:docker://…` verification requires the
-  pubkey **inside the image** plus matching `policy.json`/`registries.d`
-  entries — `image-info` ships all three; keep them in sync.
+- **Signing**: `halcyon-rebase.just` advertises
+  `ostree-image-signed:docker://…`, which requires `cosign.pub` **inside the
+  image** plus a matching `/etc/containers/policy.json` entry and a
+  `registries.d` sigstore config. Shipping `cosign.pub` only at the repo root is
+  not enough.
+- **`build_files/libdnf5.conf.d/99-halcyon-retries.conf`** only takes effect if
+  something copies it to `/etc/dnf/libdnf5.conf.d/` early in the build. It is
+  not installed by the Containerfile as-is.
+- **`/usr/share/ublue-os/image-info.json`** is consumed by `bazzite-steam`,
+  `bazzite-steam-firstrun` and `83-halcyon-audio.just`. Nothing in this repo
+  generates it — generate it in `image-info` if you rely on those.
 - **The removals machinery is largely inherited from the Bazzite-fork era.**
   `guarded-removals`, `file-footprint`, `gnome-extensions` and `fonts-cleanup`
   mostly no-op on a bare `fedora-bootc` base and several of their comments
   describe an ordering that no longer holds. Treat their comments as historical.
 - **Package names change between Fedora releases.** Terra retired
   `terra-gamescope`/`terra-mangohud`; `lazygit` ships as
-  `golang-github-jesseduffield-lazygit`. **When a package moves repos, purge
-  the old source everywhere** — json group, consuming stage, docs — or both
-  copies file-conflict at install time (lazygit: atim COPR vs Terra both own
-  /usr/bin/lazygit). Fedora 44 renames to know:
-  `du-dust` (not dust), `pandoc-cli` (not pandoc), `nodejs24` +
-  `nodejs24-npm` (not nodejs/npm), `adw-gtk3-theme` (not adw-gtk3),
-  `Thunar` (capital T). Before adding a package, verify it resolves for F44
-  from the repo you expect:
+  `golang-github-jesseduffield-lazygit`. Before adding a package, verify it
+  resolves for F44 from the repo you expect:
   `dnf5 repoquery --repo=<id> --qf '%{name}\n' <name>`.
 
 ---

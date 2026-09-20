@@ -1,0 +1,41 @@
+---
+name: lint
+# PR gate modeled on bazzite's just-syntax-check.yml, widened to also run
+# shellcheck over build_files (the same two gates the build workflow runs
+# before podman, so PRs fail here in seconds instead of 40 minutes in).
+on:
+  pull_request:
+  push:
+    branches: [container, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Just + shell syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      - name: Check Just + bash syntax
+        run: |
+          source .github/log-helpers.sh
+          banner "just check"
+          just check && ok "just check passed"
+
+      - name: Shellcheck build_files
+        run: |
+          source .github/log-helpers.sh
+          banner "just lint"
+          just lint && ok "just lint passed"

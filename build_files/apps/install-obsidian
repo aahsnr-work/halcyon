@@ -126,7 +126,6 @@ if command -v desktop-file-validate >/dev/null 2>&1; then
 fi
 
 echo "--- Locating icon ---"
-icon_installed=false
 ICON_SRC=""
 while IFS= read -r candidate; do
   ICON_SRC="${candidate}"
@@ -136,7 +135,6 @@ done < <(find squashfs-root \( -ipath '*hicolor*obsidian*.png' -o -ipath '*icons
 if [ -n "${ICON_SRC}" ]; then
   install -Dm644 "${ICON_SRC}" /usr/share/icons/hicolor/512x512/apps/obsidian.png
   echo "  OK    icon installed from ${ICON_SRC}"
-  icon_installed=true
 else
   echo "  WARN  no icon file found inside AppImage"
 fi

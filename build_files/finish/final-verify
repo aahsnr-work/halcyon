@@ -39,6 +39,16 @@ gate "only Fedora repo files remain"     sh -c '! ls /etc/yum.repos.d/ | grep -E
 gate "terra repos all disabled"          sh -c '! grep -l "^enabled=1" /etc/yum.repos.d/terra*.repo 2>/dev/null | grep -q .'
 echo "::endgroup::"
 
+echo "::group::final-verify — homebrew + chezmoi end state"
+gate "brew payload baked in /usr"        test -s /usr/share/halcyon/brew-bundle.tar.zst
+gate "brew seeding unit enabled"         systemctl is-enabled halcyon-brew-bundle.service
+gate "brew helpers shipped"              sh -c 'test -x /usr/libexec/halcyon-image/brew-bundle-extract && test -x /usr/libexec/halcyon-image/brew-bundle-install'
+gate "Brewfile shipped"                  sh -c 'test -f /usr/share/ublue-os/homebrew/Brewfile && grep -q "^brew " /usr/share/ublue-os/homebrew/Brewfile'
+gate "chezmoi installed"                 rpm -q chezmoi
+gate "chezmoi-init wired --global"       test -L /etc/systemd/user/default.target.wants/chezmoi-init.service
+gate "chezmoi-update.timer wired"        test -L /etc/systemd/user/timers.target.wants/chezmoi-update.timer
+echo "::endgroup::"
+
 # --- package census (distinctively reported in CI; baked into the image) ---
 echo "::group::final-verify — package census"
 TOTAL_PACKAGES="$(rpm -qa | wc -l)"

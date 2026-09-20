@@ -43,7 +43,7 @@ echo ""
 echo "--- fonts-cleanup summary ---"
 echo "  Removed : ${#removed[@]}  (${removed[*]:-none})"
 echo "  Kept    : ${#kept[@]}"
-echo "    Protected   : $(printf '%s\n' "${kept[@]}" | grep -v '(required)' | grep -v '(rpm -e' | wc -l)"
+echo "    Protected   : $(printf '%s\n' "${kept[@]}" | grep -vc -e '(required)' -e '(rpm -e')"
 echo "    Required    : ${#skipped_required[@]}"
 
 echo "--- Rebuilding font cache ---"

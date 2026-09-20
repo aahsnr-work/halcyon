@@ -20,6 +20,7 @@
 #   Step E — gnome-extensions.sh (extension dirs + gschema overrides)
 #   Step F — fonts-cleanup.sh (unprotected, unreferenced font RPMs)
 set -euo pipefail
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::remove-packages — Step B: proven-present removals (packages.json exclude.all)"

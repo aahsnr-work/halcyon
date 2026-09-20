@@ -56,9 +56,13 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
   again at finalize), zed, emacs-pgtk, neovim; Obsidian, Zotero, Pyprland,
   TeX Live and a Python helper family baked at build time.
 - **Tooling:** the former brew formulas as RPMs (bat, eza, fzf, lazygit,
-  ripgrep, starship, yazi, zellij, …), chezmoi (Fedora RPM) wired to
+  ripgrep, starship, yazi, zellij, …) **plus a baked Homebrew payload**
+  (22 formulas incl. `bun`, `pixi`, `opencode` — brewed at build time into
+  `/usr/share/halcyon/brew-bundle.tar.zst`, seeded pre-login offline by
+  `halcyon-brew-bundle.service`; RPMs keep PATH priority), chezmoi (Fedora
+  RPM) wired to
   [aahsnr-configs/dotfiles](https://github.com/aahsnr-configs/dotfiles)
-  (first-login init + daily update), nix via the
+  (first-login init + update timer, blue-build module semantics), nix via the
   [fu5ha/winter](https://github.com/fu5ha/winter) bind-mount pattern,
   and ujust/uupd (`ublue-os-just` + `uupd`) with curated Bazzite recipes.
 - **Flatpak:** package + **flathub user repo only** (no system flathub, no

@@ -17,6 +17,7 @@
 # nerdfontssymbolsonly-nerd-fonts exist only in Terra; the Fedora-side fonts
 # (google-noto-*, jetbrains-mono-fonts, liberation) install in install-packages.
 set -euo pipefail
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::install-terra — Terra packages"

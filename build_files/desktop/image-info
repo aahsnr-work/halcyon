@@ -10,8 +10,11 @@ if grep -q '^HOME_URL=' /usr/lib/os-release; then
 else
   echo 'HOME_URL=https://github.com/aahsnr-work/halcyon' >> /usr/lib/os-release
 fi
-# plymouth theme assets are generated from the baked astronaut wallpaper
-/ctx/branding/build-plymouth-assets
+# plymouth theme assets are generated from the baked astronaut wallpaper.
+# NOTE: ctx is flat per build_files subfolder — build-plymouth-assets lives in
+# desktop/ next to this script, NOT in branding/ (a stale /ctx/branding/ path
+# here used to abort the whole build with `no such file or directory`).
+/ctx/desktop/build-plymouth-assets
 echo "::endgroup::"
 
 echo "::group::image-info — image-info.json + sigstore policy assets"

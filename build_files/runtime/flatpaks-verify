@@ -7,7 +7,9 @@ echo "::group::flatpaks-verify — package + remote end state"
 gate "flatpak installed"                 rpm -q flatpak
 gate "flatpak-selinux installed"         rpm -q flatpak-selinux
 gate "libnotify (notify-send)"           rpm -q libnotify
+# shellcheck disable=SC2016  # quoting is intentional: expanded by the inner sh -c
 gate "no system flatpak remotes"         sh -c 'd=/etc/flatpak/remotes.d; [ ! -d "$d" ] || [ -z "$(ls -A "$d")" ]'
+# shellcheck disable=SC2016
 gate "no system flatpak repo state"      sh -c '[ ! -d /var/lib/flatpak ] || [ -z "$(ls -A /var/lib/flatpak)" ]'
 gate "fedora-workstation-repositories absent" sh -c '! rpm -q fedora-workstation-repositories >/dev/null 2>&1'
 gate "per-user setup unit present"       test -f /usr/lib/systemd/user/halcyon-flatpak-setup.service

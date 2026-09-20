@@ -6,6 +6,7 @@
 # Package LISTS live in build_files/packages.json — this stage owns the
 # repo windows and flags only.
 set -euo pipefail
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::install-packages — core + desktop + gaming + apps"

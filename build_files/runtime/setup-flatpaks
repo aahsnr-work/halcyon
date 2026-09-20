@@ -9,6 +9,7 @@
 # per-user at first login (MIGRATION §8.1: they become monorepo RPMs later;
 # flatpak state lives in /var/home anyway).
 set -euo pipefail
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::setup-flatpaks — flatpak package + user-repo wiring"
@@ -56,6 +57,7 @@ flatpak remote-modify --user --enable flathub
 BODY
 
 # --- baked app lists from packages.json (flatpak.remove, then install) ---
+# shellcheck disable=SC2129  # appends to the generated file are intentional
 flatpak_apps remove | while read -r app; do
   echo "flatpak remove --user --noninteractive --delete-data '$app' 2>/dev/null || true"
 done >> /usr/libexec/halcyon-image/flatpak-setup

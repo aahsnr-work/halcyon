@@ -5,7 +5,7 @@
 # usr/share/ublue-os/just/80-bazzite.just).
 # Dropped: automounting/framework/steamos-automount (ublue media-automount
 # not installed), tailscale, configure-amd-hdmi21 + FSR4 recipes (AMD),
-# configure-snapshots (snapper), bazzite-cli (brew retired),
+# configure-snapshots (snapper), bazzite-cli,
 # _toggle-steamdeck-alias (deck), _install-system-flatpaks,
 # _disable-ntfs-service (bazzite-only).
 # Adapted for bootc: rpm-ostree kargs -> grubby (bootc has no rpm-ostree),

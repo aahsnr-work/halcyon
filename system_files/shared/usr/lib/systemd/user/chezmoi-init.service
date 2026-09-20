@@ -1,8 +1,10 @@
 [Unit]
-Description=Apply halcyon dotfiles via chezmoi (first login)
+Description=Initializes Chezmoi if directory is missing
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=!%h/.local/share/chezmoi
+# blue-build chezmoi module condition: run only for users with NO existing
+# chezmoi source directory (checks the .git dir the module clone creates).
+ConditionPathExists=!%h/.local/share/chezmoi/.git/
 
 [Service]
 Type=oneshot

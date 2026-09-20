@@ -13,20 +13,52 @@ export fedora_version := env_var("FEDORA_VERSION")
 default:
     @just --list
 
-# Check Justfile + all build_files scripts
+# Check Justfile + all build_files scripts + recipe bodies + verify helpers
 [group('Just')]
 check:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Checking syntax: Justfile"
-    just --unstable --fmt --check -f Justfile
     status=0
+    echo "Checking syntax: Justfile"
+    just --unstable --fmt --check -f Justfile || status=1
+
+    echo "::group::bash -n — build_files scripts"
     while read -r file; do
         echo "Checking syntax: $file"
         bash -n "$file" || status=1
     done < <(find build_files -type f \
                ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
                ! -name "*.json" ! -name "README*")
+    echo "::endgroup::"
+
+    echo "::group::bash -n — verify/ helpers + workflow shell code"
+    for file in verify/*.sh .github/log-helpers.sh; do
+        [ -e "$file" ] || continue
+        echo "Checking syntax: $file"
+        bash -n "$file" || status=1
+    done
+    echo "::endgroup::"
+
+    echo "::group::recipe bodies — parse + bash -n (ujust runtime syntax)"
+    for module in system_files/shared/usr/share/ublue-os/just/*.just; do
+        just --justfile "$module" --list >/dev/null 2>&1 \
+            || { echo "Recipe module does not parse: $module"; status=1; continue; }
+        for recipe in $(just --justfile "$module" --summary); do
+            body="$(just --justfile "$module" --show "$recipe" 2>/dev/null)" || continue
+            # just --show prints attributes ([group(...)]), the recipe header,
+            # then the body; bodies are bash shebang scripts — take everything
+            # from the first `#!` line on (empty for non-script recipes, and
+            # `bash -n` passes on empty input).
+            if printf '%s\n' "$body" | awk 'f{print} /^#!/{f=1}' | bash -n; then
+                echo "Checking recipe: $(basename "$module")::$recipe — OK"
+            else
+                echo "Recipe body FAILED bash -n: $(basename "$module")::$recipe"
+                status=1
+            fi
+        done
+    done
+    echo "::endgroup::"
+
     exit "$status"
 
 # Fix Justfile formatting
@@ -45,10 +77,22 @@ lint:
         echo "shellcheck could not be found. Please install it."
         exit 1
     fi
-    find build_files -type f \
+    status=0
+    # while-read + explicit status accumulation: `find -exec` would report
+    # only the LAST invocation's exit code and silently mask earlier failures
+    while read -r file; do
+        # -x follows `# shellcheck source=` directives (packages-lib gets
+        # linted transitively instead of producing SC1091 noise)
+        if shellcheck --shell=bash -x "$file"; then
+            echo "shellcheck OK: $file"
+        else
+            echo "shellcheck FAILED: $file"
+            status=1
+        fi
+    done < <(find build_files -type f \
         ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
-        ! -name "*.json" ! -name "README*" \
-        -exec shellcheck --shell=bash {} ';'
+        ! -name "*.json" ! -name "README*")
+    exit "$status"
 
 # Build the container image with the CI label scheme
 [group('Build')]

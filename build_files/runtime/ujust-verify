@@ -17,5 +17,15 @@ gate "uupd installed"                    rpm -q uupd
 gate "uupd.timer unit present"           test -f /usr/lib/systemd/system/uupd.timer
 gate "ujust recipes resolve"             ujust --list >/dev/null 2>&1
 echo "::endgroup::"
+
+echo "::group::ujust-verify — interactive chooser (ujust --choose)"
+# `ujust --choose` shells out to `just --choose`, whose default chooser is
+# fzf. Gate the binary AND that the installed just understands the flag, so
+# the first-boot menu can never come up broken.
+gate "fzf installed (chooser)"           rpm -q fzf
+gate "just supports --choose"            sh -c 'just --help 2>&1 | grep -q -- --choose'
+# shellcheck disable=SC2016
+gate "ujust list output non-empty"       sh -c '[ -n "$(ujust --list 2>/dev/null)" ]'
+echo "::endgroup::"
 [ "$fail" = 0 ] || { echo "::error::ujust-verify failed"; exit 1; }
 echo "--- ujust-verify: all checks passed ---"

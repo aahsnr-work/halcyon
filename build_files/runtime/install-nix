@@ -4,6 +4,7 @@
 # ship via the static tree: usr/lib/tmpfiles.d/nix.conf,
 # etc/profile.d/01-nix-resolve-home-env.sh, systemd/{var-nix,nix.mount}).
 set -euo pipefail
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::install-nix — nix multi-user install"

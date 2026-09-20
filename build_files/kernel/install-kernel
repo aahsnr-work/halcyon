@@ -40,7 +40,10 @@ if [ "${#STOCK_KERNEL[@]}" -gt 0 ]; then
   # --no-autoremove must follow the remove command keyword (dnf5 CLI)
   dnf5 -y remove --no-autoremove "${STOCK_KERNEL[@]}"
 fi
-rm -rf /boot/* /usr/lib/modules/* /lib/modules/*
+# find(1) instead of `rm -rf /boot/*`-style globs: identical end state, no
+# glob edge cases, shellcheck-clean
+find /boot -mindepth 1 -delete 2>/dev/null || true
+find /usr/lib/modules /lib/modules -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 # --- p03 kernel + prebuilt nvidia-open modules (x86-64-v3 builds; the -gcc
 # v2 fallback and kernel-p03-gcc-nvidia-open exist in the same COPR).
