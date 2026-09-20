@@ -53,7 +53,7 @@ jobs:
           echo "::group::Polling consumed COPRs (up to 30 attempts × 60s)"
           URLS=(
             "https://download.copr.fedorainfracloud.org/results/lionheartp/Hyprland/fedora-44-x86_64/repodata/repomd.xml"
-             "https://download.copr.fedorainfracloud.org/results/catpieleaf/kernel-p03/fedora-44-x86_64/repodata/repomd.xml"
+            "https://download.copr.fedorainfracloud.org/results/catpieleaf/kernel-p03/fedora-44-x86_64/repodata/repomd.xml"
             "https://download.copr.fedorainfracloud.org/results/ublue-os/packages/fedora-44-x86_64/repodata/repomd.xml"
             "https://download.copr.fedorainfracloud.org/results/sneexy/zen-browser/fedora-44-x86_64/repodata/repomd.xml"
           )

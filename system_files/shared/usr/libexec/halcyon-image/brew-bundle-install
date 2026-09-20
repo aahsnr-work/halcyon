@@ -51,10 +51,10 @@ fi
 
 echo "INFO: ${#missing[@]} formula(s) missing or incomplete despite boot seeding: ${missing[*]}"
 
-# --- Wait for brew binary (brew-setup.service runs before user sessions, but
+# --- Wait for brew binary (halcyon-brew-bundle.service runs before user sessions, but
 #     on an extremely slow first boot it may still be extracting the tarball) ---
 if [[ ! -x "${BREW}" ]]; then
-  echo "INFO: Homebrew binary not yet present; waiting for brew-setup.service to finish (up to 60s)..."
+  echo "INFO: Homebrew binary not yet present; waiting for halcyon-brew-bundle.service to finish (up to 60s)..."
   waited=0
   while [[ ! -x "${BREW}" && ${waited} -lt 60 ]]; do
     sleep 2
@@ -63,8 +63,8 @@ if [[ ! -x "${BREW}" ]]; then
 fi
 
 if [[ ! -x "${BREW}" ]]; then
-  echo "ERROR: ${BREW} not found or not executable after 60s — brew-setup.service may have failed." >&2
-  echo "       Run:  systemctl status brew-setup.service" >&2
+  echo "ERROR: ${BREW} not found or not executable after 60s — halcyon-brew-bundle.service may have failed." >&2
+  echo "       Run:  systemctl status halcyon-brew-bundle.service" >&2
   exit 1
 fi
 

@@ -76,7 +76,7 @@ RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
     echo "████ STAGE 03/17 · install-kernel · p03 + nvidia-open (Stage K1) ████" \
-    && /ctx/kernel/install-kernel && /ctx/cleanup
+    && /ctx/kernel/install-kernel && /ctx/kernel/kernel-verify && /ctx/cleanup
 
 # ---- Stage 4: core + desktop + gaming + apps -------------------------------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \

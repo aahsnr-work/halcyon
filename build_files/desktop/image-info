@@ -34,6 +34,8 @@ chmod 0644 /usr/share/ublue-os/image-info.json
 # key plus a sigstore policy entry so `bootc switch
 # --enforce-container-sigpolicy ostree-image-signed:...` verifies out of the box.
 install -Dm0644 /ctx/cosign.pub /usr/etc/pki/containers/halcyon.pub
+install -d /etc/pki/containers
+ln -sf /usr/etc/pki/containers/halcyon.pub /etc/pki/containers/halcyon.pub
 install -d /etc/containers/registries.d
 cat >/etc/containers/registries.d/halcyon.yaml <<'YAML'
 docker:

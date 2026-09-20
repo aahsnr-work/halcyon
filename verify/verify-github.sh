@@ -118,6 +118,21 @@ done
 pass "workflow helper references resolve"
 echo "::endgroup::"
 
+echo "::group::verify-github — COPR repodata polling configuration"
+if grep -q 'solopasha' "${GH}/workflows/build.yml"; then
+  failf "build.yml references obsolete solopasha COPR"
+else
+  pass "build.yml contains no obsolete solopasha COPR"
+fi
+for copr in "catpieleaf/kernel-p03" "lionheartp/Hyprland" "ublue-os/packages" "sneexy/zen-browser"; do
+  if grep -q "${copr}" "${GH}/workflows/build.yml"; then
+    pass "build.yml monitors ${copr}"
+  else
+    failf "build.yml missing COPR monitor for ${copr}"
+  fi
+done
+echo "::endgroup::"
+
 echo "::group::verify-github — actionlint (optional)"
 if command -v actionlint >/dev/null 2>&1; then
   if actionlint -color=never "${GH}"/workflows/*.yml; then
