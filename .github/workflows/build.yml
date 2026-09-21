@@ -26,7 +26,7 @@ jobs:
     name: Build and push image
     # Pinned on purpose: ubuntu-latest migrates to 26.04 between 2026-10-19 and
     # 2026-11-19, and ublue-os/remove-unwanted-software@v9 breaks there.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       contents: read
