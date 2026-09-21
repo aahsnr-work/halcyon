@@ -33,9 +33,8 @@ FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 ARG IMAGE_VERSION="44.0"
 ARG SOURCE_SHA="unknown"
 
-# LICENSE at the repo root is Apache-2.0, as is every pyproject.toml in
-# build_files/python-packages. The label set must agree with it — the
-# Justfile's io.artifacthub.package.license is kept in sync.
+# The repo LICENSE and every pyproject.toml are Apache-2.0; the label set must
+# agree (the Justfile's io.artifacthub.package.license is kept in sync).
 LABEL org.opencontainers.image.title="halcyon" \
       org.opencontainers.image.description="Lean Hyprland gaming desktop — fedora-bootc + p03 kernel + NVIDIA open (negativo17 userland) + noctalia greeter + ujust/uupd" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
@@ -50,10 +49,6 @@ LABEL org.opencontainers.image.title="halcyon" \
       halcyon.desktop="hyprland-noctalia"
 
 # static system tree (configs, units, ujust modules, theme, wallpaper)
-# NOTE: this lands BEFORE any RPM install, so an RPM that owns the same path
-# in a later stage overwrites it. Anything RPM-owned (greetd's config.toml,
-# pam.d/greetd) is installed from /ctx in its consuming stage instead; drop-in
-# files that could collide are zz-prefixed so they sort last.
 COPY system_files/shared/ /
 
 # dnf5 patience drop-in MUST land in the first RUN — it exists to survive
@@ -66,9 +61,7 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
 
 # ---- Stage 1: shared external repos + jq/dnf5-plugins bootstrap ------------
 # Repos come first so the removals stage can read its list from packages.json;
-# jq/dnf5-plugins are two tiny build tools and do not meaningfully change the
-# pristine graph the removals run against. jq is NOT assumed present in the
-# base — packages-lib cannot parse packages.json without it.
+# jq is installed explicitly because packages-lib cannot parse it without.
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
     echo "████ STAGE 01/17 · setup-repos · base external repos + jq ████" \
@@ -104,8 +97,8 @@ RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     echo "████ STAGE 06/17 · install-devtools · Fedora devtools ████" \
     && /ctx/packages/install-devtools && /ctx/cleanup
 
-# ---- Stage 7: Homebrew (core + the three formulas Fedora/Terra lack, BAKED
-#      into a /usr payload; halcyon-brew-bundle.service seeds it pre-login) --
+# ---- Stage 7: Homebrew (core + the formulas Fedora/Terra lack, BAKED into a
+#      /usr payload; halcyon-brew-bundle.service seeds it pre-login at boot) --
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
     echo "████ STAGE 07/17 · install-brew-bundle · Homebrew bake ████" \
     && /ctx/brew/install-brew-bundle && /ctx/brew/brew-verify && /ctx/cleanup
@@ -134,14 +127,14 @@ RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     echo "████ STAGE 11/17 · setup-ujust · ublue-os-just + uupd ████" \
     && /ctx/runtime/setup-ujust && /ctx/runtime/ujust-verify && /ctx/cleanup
 
-# ---- Stage 12: system config (greetd, services, chezmoi + brew wiring) -----
+# ---- Stage 12: system config (services, tmpfiles, chezmoi + brew wiring) ----
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    echo "████ STAGE 12/17 · configure-system · greetd + units + services ████" \
+    echo "████ STAGE 12/17 · configure-system · units + services ████" \
     && /ctx/desktop/configure-system && /ctx/desktop/system-verify && /ctx/cleanup
 
-# ---- Stage 13: branding (os-release identity + plymouth theme) --------------
+# ---- Stage 13: branding (os-release identity + plymouth theme + sigstore) ---
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    echo "████ STAGE 13/17 · image-info · os-release + plymouth ████" \
+    echo "████ STAGE 13/17 · image-info · os-release + plymouth + sigstore policy ████" \
     && /ctx/desktop/image-info && /ctx/desktop/branding-verify && /ctx/cleanup
 
 # ---- Stage 14: initramfs LAST (plymouth theme + nvidia hooks baked in) ------
@@ -163,8 +156,6 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
 # ---- Final gate: hermetic bootc lint (bazzite pattern) -----------------------
 # shell form here (not exec form) so the banner echo can share the RUN; bootc
 # lint is short-lived so shell signal semantics are irrelevant.
-# TODO: once final-verify's bootc-invariant group has been green for a few
-# builds, add --fatal-warnings here so var-tmpfiles/sysusers cannot regress.
 RUN --mount=type=tmpfs,target=/run --network=none \
     echo "████ STAGE 17/17 · bootc container lint · hermetic final gate ████" \
     && bootc container lint

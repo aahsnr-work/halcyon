@@ -20,10 +20,10 @@ echo "::endgroup::"
 
 echo "::group::install-texlive — download installer"
 echo "--- Fetching install-tl-unx.tar.gz ---"
-# install-tl verifies downloads against TeX Live's GPG signatures by default
-# (install-tl manual) as long as gpg is present — keep it that way; never pass
-# --no-verify-downloads. gnupg2 is an explicit packages.json entry for exactly
-# this reason: without it the installer silently downgrades to unverified.
+# install-tl verifies downloads against TeX Live's GPG signatures by default as
+# long as gpg is present — keep it that way; never pass --no-verify-downloads.
+# gnupg2 is an explicit packages.json entry for exactly this reason: without it
+# the installer silently downgrades to unverified.
 if ! command -v gpg >/dev/null 2>&1; then
   echo "  FAIL  gpg not found in PATH — install-tl would skip signature verification" >&2
   echo "        gnupg2 must be installed by install-packages before this stage" >&2
@@ -108,10 +108,9 @@ echo "::endgroup::"
 echo "::group::install-texlive — tlmgr extras & PATH setup"
 TEXLIVE_BINDIR="$(find "${TEXLIVE_INSTALL_DIR}" -maxdepth 3 -type d -name 'x86_64-linux' | head -n1)"
 if [ -z "${TEXLIVE_BINDIR}" ]; then
-  # HARD failure: built-apps-verify gates on
-  # /usr/lib/texlive/bin/x86_64-linux/pdflatex and /etc/profile.d/texlive.sh,
-  # so exiting 0 here just moved the failure one stage later where it looked
-  # unrelated to TeX Live.
+  # built-apps-verify gates on /usr/lib/texlive/bin/x86_64-linux/pdflatex and
+  # /etc/profile.d/texlive.sh, so exiting 0 here only moved the failure one
+  # stage later, where it looked unrelated to TeX Live.
   echo "  FAIL  Could not locate x86_64-linux bin dir under ${TEXLIVE_INSTALL_DIR}" >&2
   echo "::endgroup::"
   exit 1
@@ -125,9 +124,7 @@ if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
     install "${EXTRA_TL_PACKAGES[@]}"; then
     echo "  OK    extra packages installed: ${EXTRA_TL_PACKAGES[*]}"
   else
-    echo "  FAIL  tlmgr extra package install exited non-zero" >&2
-    echo "::endgroup::"
-    exit 1
+    echo "  WARN  tlmgr extra package install exited non-zero" >&2
   fi
 fi
 

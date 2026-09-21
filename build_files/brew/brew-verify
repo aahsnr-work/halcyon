@@ -29,20 +29,17 @@ if [ -s "${PAYLOAD}" ]; then
   echo "  INFO  payload: ${size}, ${entries} entries"
   gate "payload carries brew core"        grep -qF 'home/linuxbrew/.linuxbrew/bin/brew' "${PAYLIST}"
 
-  # brew-update.service and brew-upgrade.service both gate on
+  # brew-update.service / brew-upgrade.service gate on
   # ConditionPathIsSymbolicLink=/home/linuxbrew/.linuxbrew/bin/brew. If the
-  # payload ever carries a regular file there, BOTH timers skip forever and
-  # nothing ever reports it. Assert the link survives the pack.
+  # payload ever carries a regular file there, BOTH timers skip forever without
+  # reporting anything. Assert the link survives the pack.
   gate "bin/brew is a symlink in payload" \
     grep -qE '^l.*home/linuxbrew/\.linuxbrew/bin/brew ->' "${PAYLIST_LONG}"
 
   echo "--- Checking every Brewfile formula is inside the payload ---"
   # "Inside" means a COMPLETE pour: Cellar/<name>/<version>/INSTALL_RECEIPT.json.
-  # NOTE: use grep -c (no -q, no early exit) for the two-stage match — a
-  # `grep | grep -q` pipeline under pipefail can fail with SIGPIPE (141) when
-  # the upstream grep is still emitting later matches after the -q grep has
-  # already found its first match and exited. That false negative is exactly
-  # what failed a main-branch CI run for btop/chafa/gnuplot.
+  # grep -c (no -q, no early exit) for the two-stage match: `grep | grep -q`
+  # under pipefail can die with SIGPIPE (141) — a false negative seen live.
   missing=0
   while IFS= read -r name; do
     [ -z "${name}" ] && continue
@@ -62,17 +59,17 @@ if [ -s "${PAYLOAD}" ]; then
 fi
 echo "::endgroup::"
 
-echo "::group::brew-verify — payload carries only what Fedora does not ship"
-# The Brewfile is deliberately trimmed to formulas with no RPM in this image
-# (bun/pixi/opencode). Anything else is poured, shipped and then shadowed on
-# PATH forever, because environment.d APPENDS the brew dirs by design.
+echo "::group::brew-verify — Brewfile carries only what Fedora/Terra do not ship"
+# environment.d APPENDS the brew dirs to PATH, so an RPM always wins. A formula
+# that also has an RPM is poured, shipped and permanently shadowed. Warn only:
+# a new no-RPM formula is legitimate, add it to the allowlist below.
 dupes=0
 while IFS= read -r name; do
   [ -z "${name}" ] && continue
   case "${name}" in
     bun|pixi|opencode) continue ;;
   esac
-  echo "  WARN  ${name} is in the Brewfile but not on the no-RPM allowlist — confirm Fedora/Terra really lacks it"
+  echo "  WARN  ${name} is in the Brewfile but not on the no-RPM allowlist — confirm Fedora/Terra really lack it"
   dupes=$((dupes + 1))
 done < <(sed -nE 's/^[[:space:]]*brew "?([^" ]+)"?.*/\1/p' "${BREWFILE}" | sed 's|^.*/||')
 [ "${dupes}" -eq 0 ] && echo "  OK    no RPM-shadowed formulas in the Brewfile"

@@ -26,6 +26,7 @@ file](#splitting-this-file-into-agent-skills) at the end.
 | [`diagnose-failed-build`](#skill-diagnose-failed-build) | A local or CI build went red |
 | [`bump-fedora-release`](#skill-bump-fedora-release) | Moving F44 → F45 |
 | [`bump-kernel-or-nvidia`](#skill-bump-kernel-or-nvidia) | Changing the p03 kernel or the NVIDIA driver line |
+| [`ci-signing-and-runners`](#skill-ci-signing-and-runners) | Touching workflows, bumping Cosign, or changing runners |
 
 ---
 
@@ -116,24 +117,24 @@ subsystem, a new class of software, a new configuration phase.
 ### Steps
 
 1. **Name the script** `build_files/<folder>/<verb>-<subject>`, extensionless,
-   matching the existing vocabulary: `install-*`, `setup-*`, `configure-*`,
-   `build-*`, `remove-*`. Pick the folder by build phase — `base/ kernel/
-   packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
+   matching the existing vocabulary (`install-*`, `setup-*`, `configure-*`,
+   `build-*`, `remove-*`). Pick the folder by build phase — `base/ kernel/
+packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
 
    ```bash
    git add build_files/runtime/install-foo
    git update-index --chmod=+x build_files/runtime/install-foo
    ```
 
-2. **Skeleton** (copy the shape of `runtime/install-nix`, the smallest real
-   example). Note the shellcheck directive is relative to the SCRIPT's
-   directory, not the repo root:
+2. **Skeleton** (copy `runtime/install-nix`). The shellcheck directive is
+   resolved relative to ShellCheck's WORKING DIRECTORY (the repo root, where
+   `just lint` runs), so it names `build_files/packages-lib`:
 
    ```bash
    #!/usr/bin/env bash
    # halcyon build step — install-foo (one line on WHY this stage exists)
    set -euo pipefail
-   # shellcheck source=../packages-lib
+   # shellcheck source=build_files/packages-lib
    source /ctx/packages-lib
    packages_validate
    echo "::group::install-foo — <phase>"
@@ -143,12 +144,7 @@ subsystem, a new class of software, a new configuration phase.
    echo "::endgroup::"
    ```
 
-3. **Write the verify companion** `build_files/install-foo-verify` before you
-   write the stage body — it forces you to state what "success" means. See
-   [`add-verify-gate`](#skill-add-verify-gate).
-
-4. **Insert the `RUN` block** in `Containerfile` at the correct position, with
-   a stage banner. Use this form verbatim when the stage calls `dnf5`:
+3. **Insert the `RUN` block** in `Containerfile` with a stage banner:
 
    ```dockerfile
    # ---- Stage N: foo ----------------------------------------------------------
@@ -206,7 +202,7 @@ subsystem, a new class of software, a new configuration phase.
 
 2. Pick the destination by **source repo**, not by what the package does:
 
-   | Source                           | File                                                | How                                           |
+   | Source                           | Where                                               | How                                           |
    | -------------------------------- | --------------------------------------------------- | --------------------------------------------- |
    | Fedora (core/hardware)           | `packages.json` → `fedora-core` / `fedora-hardware` | alphabetical in the group                     |
    | Fedora (editors/runtimes)        | `packages.json` → `fedora-editors`                  | alphabetical                                  |
@@ -308,25 +304,23 @@ echo "--- <stage>-verify: all checks passed ---"
    sweep, keeper set, package census) go in `final-verify`.
 
 ### Gate forms that are wrong in this environment
-
+ 
 - **`test -e /usr/lib/systemd/system/<target>.wants/<unit>`** — `systemctl
-  enable` inside a build container writes to **`/etc/systemd/system/…`**.
-  Use `systemctl is-enabled <unit>`, which is path-agnostic.
-- **A gate whose glob a later stage deletes.** `final-verify` carried
+enable` in a build container writes to `/etc/systemd/system/…`. Use
+  `systemctl is-enabled <unit>`.
+- **A gate whose glob a later stage deletes.** `final-verify` once had
   `! grep -l "^enabled=1" /etc/yum.repos.d/terra*.repo | grep -q .` — but
-  `finalize` deletes those files, so the glob matched nothing and the gate
-  passed unconditionally. Gate the property that survives.
-- **`test "${VAR}" = "$(...)"` where VAR may be empty.** If both sides fail to
-  produce a value, `test "" = ""` PASSES. The NVIDIA userland/module version
-  gate needs a companion `test -n "${NV_MOD_VER}"` in front of it.
-- **Gating a package that was installed with `|| true`.** Either the package is
-  required (drop the `|| true`) or it is optional (drop the gate).
-- **Gating a path inside a directory that may not exist** — `grep -rq pattern
-  /some/dir/` returns non-zero for "directory missing" *and* "pattern absent".
-  Add a `test -d` gate alongside it.
-- **Gating a file's existence when an RPM may rewrite its content.** Gate the
-  content (`grep -q` for the line that matters), or install the file from
-  `/ctx` after the RPM lands — see `configure-system`'s greetd handling.
+  `finalize` deletes those files, so it passed unconditionally.
+- **`test "${VAR}" = "$(...)"` where VAR may be empty.** `test "" = ""` PASSES.
+  The NVIDIA version gate needs `test -n "${NV_MOD_VER}"` in front of it.
+- **Gating "directory X is empty" without checking who writes there.** Brave's
+  RPM installs into `/opt`.
+- **A `grep` over shipped recipe files.** Comments and fallback branches match.
+  Gate behaviour, not prose.
+- **Gating a package installed with `|| true`.** Either it is required (drop the
+  `|| true`) or optional (drop the gate).
+- **`grep -rq pattern /some/dir/`** returns non-zero for "directory missing" and
+  "pattern absent" alike. Add a `test -d` gate alongside it.
 
 ---
 
@@ -522,10 +516,12 @@ tmpfiles rule.
    - the table in `build_files/python-packages/README.md`;
    - the `for b in …` loop in `build_files/built-apps-verify`.
 
-6. **The build-time smoke test is `-h` or `--version`.** Every tool must answer
-   one of them non-interactively and exit 0, with no TTY and no X/Wayland
-   session. If your `main()` touches the terminal before parsing arguments, the
-   build fails.
+6. **The build-time smoke test is `-h` or `--version`, and it is not enough.**
+   It never reaches the code that does the work, and `py_compile` only checks
+   syntax — a missing import is invisible to both (it shipped in `rmi`).
+   `just lint-python` runs ruff for undefined names (F821) and syntax errors.
+   Add a `tests/` directory for anything with side effects, and list the package
+   in the `for pkg in …` loop of the `test-python` recipe.
 
 ### Tests
 
@@ -696,7 +692,7 @@ after installs.
    harmless — `dnf5` would otherwise abort the whole transaction on one missing
    argument.
 2. If removing it could break something else, use the **reverse-dependency
-   gate** pattern from `guarded-removals` rather than removing blind:
+   gate** pattern rather than removing blind:
 
    ```bash
    reqs="$(dnf5 repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
@@ -704,8 +700,7 @@ after installs.
    ```
 
 3. If the package **must not survive**, add it to the hard-fail loop in
-   `guarded-removals` ("Packages that must NOT survive"), not just the candidate
-   list.
+   `remove-packages` ("hard-fail verification"), not just the candidate list.
 4. **Check nothing reinstalls it later.** Grep the whole `build_files/` tree for
    the name before committing:
 
@@ -720,15 +715,14 @@ after installs.
 ### The inherited removal machinery is gone
 
 `guarded-removals`, `file-footprint`, `gnome-extensions` and `fonts-cleanup`
-were written when halcyon was layered on Bazzite. On a bare `fedora-bootc`
-base every one of their targets is absent, so they were ~400 lines of no-op
-whose header comments described an ordering that no longer held. They have
-been deleted.
+were written when halcyon was layered on Bazzite. On a bare `fedora-bootc` base
+every one of their targets is absent, so they were ~400 lines of no-op whose
+comments described an ordering that no longer held. They have been deleted.
 
-The two parts that carried real value now live in `base/remove-packages`:
-the **reverse-dependency gate** (used for `sddm`/`cage`) and the
-**must-not-survive hard-fail loop**. Add to those rather than resurrecting
-the old scripts.
+The parts with real value now live in `base/remove-packages`: the
+**reverse-dependency gate** (used for `sddm`/`cage`) and the
+**must-not-survive hard-fail loop**. Extend those rather than resurrecting the
+old scripts.
 
 ---
 
@@ -754,6 +748,8 @@ the old scripts.
    | `Lint warning: var-tmpfiles` | content written to `/var` | add a `tmpfiles.d` rule or stop writing there |
    | `Lint … var-run` / `kernel` / `etc-usretc` / `baseimage-root` | **fatal** bootc lints | must be fixed; these fail the build |
    | `unexpected end of file` | shell syntax error | `just check`; for `.just` recipes see [`add-ujust-recipe`](#skill-add-ujust-recipe) |
+   | `A signature was required, but no signature exists` on `bootc switch` / `bootc upgrade` | signature stored in the Cosign 3 referrer format, which containers/image cannot see | `build.yml` must sign with `--new-bundle-format=false --use-signing-config=false --registry-referrers-mode=legacy`; rebuild to re-sign |
+   | `Signature for identity … is not accepted` | `policy.json` lacks `signedIdentity: matchRepository` (cosign signs by digest, bootc pulls by tag) | `desktop/image-info` |
 
    Note that the Containerfile runs `bootc container lint` **without**
    `--fatal-warnings`, so `var-tmpfiles` and `sysusers` warnings do not fail the
@@ -907,6 +903,30 @@ If the COPR's prebuilt modules and negativo17 ever drift irreconcilably, the
 documented escape hatch is the `rakuos-base` approach: DKMS-build `dkms-nvidia`
 against the p03 kernel instead of using prebuilt modules. That is a Stage-K2
 change, not a patch.
+
+---
+
+## skill: ci-signing-and-runners
+
+**Use when:** touching `.github/workflows/`, bumping Cosign, or changing runners.
+
+1. **Signing format.** Cosign 3 writes signatures as OCI 1.1 referrers by
+   default; containers/image (podman, skopeo, bootc) only reads the legacy
+   `sha256-<digest>.sig` tag. `cosign verify` accepts BOTH, so it cannot detect
+   the regression. Keep `--new-bundle-format=false --use-signing-config=false
+--registry-referrers-mode=legacy` on `cosign sign`, keep the
+   `--new-bundle-format=false` verify step, and keep `cosign-release` pinned
+   (Cosign 4 is expected to remove these flags).
+2. **Runners.** Pin `ubuntu-24.04`. `ubuntu-latest` migrates to 26.04 between
+   2026-10-19 and 2026-11-19. To move: switch one workflow to `ubuntu-26.04`, and
+   bump `ublue-os/remove-unwanted-software` past v9 (there is no v10 tag; use the
+   commit `ublue-os/image-template` pins).
+3. **Publishing.** Only `PUBLISH_BRANCH` (`container`) pushes. Scheduled and
+   dispatch runs execute from the repository default branch — if that is not
+   `container`, the daily rebuild never runs this workflow.
+4. **Actions.** Pin to a `vN` tag or a full SHA, never a branch. Renovate
+   rewrites tags to SHAs; `verify-github.sh` accepts both.
+5. Run `just check-github` after any workflow edit.
 
 ---
 

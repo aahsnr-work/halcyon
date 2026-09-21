@@ -10,23 +10,21 @@
 # tooling fails the build at the very next dnf call — loud, immediate.
 # Everything halcyon needs is (re)installed explicitly by later stages.
 #
-# HISTORY: this stage used to call four helper scripts inherited from the
-# Bazzite-fork era (guarded-removals, file-footprint, gnome-extensions,
-# fonts-cleanup). On a bare fedora-bootc base every one of their targets is
-# absent — no GNOME shell, no Waydroid, no bazzite-bling, no unreferenced
-# font RPMs — so they were ~400 lines of no-op whose header comments
-# described an ordering that no longer held. The two parts that carried real
-# value (the sddm/cage reverse-dependency gate and the must-not-survive
-# hard-fail) are folded in below.
+# HISTORY: this stage used to call four helpers inherited from the Bazzite-fork
+# era (guarded-removals, file-footprint, gnome-extensions, fonts-cleanup). On a
+# bare fedora-bootc base every target of those scripts is absent, so they were
+# ~400 lines of no-op whose comments described an ordering that no longer held.
+# The two parts with real value — the sddm/cage reverse-dependency gate and the
+# must-not-survive hard-fail — live below.
 set -euo pipefail
-# shellcheck source=../packages-lib
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 
 echo "::group::remove-packages — proven-present removals (packages.json exclude.all)"
-# main pattern: the removal list lives in packages.json (all.exclude.all) and
-# is resolved through rpm -qa first, so entries absent from the base are
-# tolerated instead of failing the transaction.
+# The removal list lives in packages.json (all.exclude.all) and is resolved
+# through rpm -qa first, so entries absent from the base are tolerated
+# instead of failing the transaction.
 readarray -t REMOVAL_CANDIDATES < <(packages_excludes)
 PRESENT=()
 if [ "${#REMOVAL_CANDIDATES[@]}" -gt 0 ]; then
@@ -36,7 +34,7 @@ fi
 # array is initialized unconditionally above instead.
 if [ "${#PRESENT[@]}" -gt 0 ]; then
   echo "  INFO  removing ${#PRESENT[@]} present package(s): ${PRESENT[*]}"
-  # --no-autoremove here: the base orphan sweep below is the only autoremove
+  # --no-autoremove here: the orphan sweep below is the only autoremove
   dnf5 -y remove --no-autoremove "${PRESENT[@]}"
 else
   echo "  INFO  nothing from the removal list is installed (clean base)"
@@ -73,9 +71,8 @@ dnf5 -y autoremove || true
 echo "::endgroup::"
 
 echo "::group::remove-packages — hard-fail verification (must-be-gone)"
-# These must NOT survive into the image under any circumstance. Unlike the
-# tolerant list above this is a gate: a survivor means the removal
-# transaction silently declined and a later stage would ship it.
+# A survivor means the removal transaction silently declined and a later stage
+# would ship it.
 rc=0
 for p in gnome-shell gdm mutter nautilus firefox waydroid inputplumber; do
   if rpm -q "$p" >/dev/null 2>&1; then
@@ -88,7 +85,7 @@ for p in gnome-shell gdm mutter nautilus firefox waydroid inputplumber; do
 done
 echo "::endgroup::"
 
-# NOTE: keeper verification (steam/gamescope/scx/umu/bazaar/lutris/…) lives
-# in final-verify — it must gate the FINAL state, and this stage runs before
+# NOTE: keeper verification (steam/gamescope/scx/umu/bazaar/lutris/…) lives in
+# final-verify — it must gate the FINAL state, and this stage runs before
 # anything is installed.
 exit "${rc}"

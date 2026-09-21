@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # halcyon build step — install-built-apps (obsidian/zotero/pyprland/texlive/python)
-# The BlueBuild build-scripts module equivalent; retired as halcyon-packages
-# RPMs land (MIGRATION §8.2/8.5/8.6 and §8.7). The python-packages sources are
-# staged from the ctx mount to the path install-python-packages expects (the
-# build-scripts.yml equivalent of `files: python-packages -> /usr/src`),
-# because /ctx is read-only and pip's egg_info step writes into the source tree.
+# BlueBuild build-scripts module ran; retired as halcyon-packages RPMs land —
+# MIGRATION §8.2/8.5/8.6 and §8.7). The python-packages sources are staged
+# from the ctx mount to the path install-python-packages.sh expects (the
+# build-scripts.yml equivalent of `files: python-packages -> /usr/src`).
 set -euo pipefail
 echo "::group::install-built-apps — obsidian/zotero/pyprland/texlive/python"
+export BUILD_SCRIPTS=/ctx
 rm -rf /usr/src/python-packages
 cp -a /ctx/python-packages /usr/src/python-packages
 /ctx/apps/install-obsidian

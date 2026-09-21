@@ -1,9 +1,8 @@
 ---
 name: clean
-# GHCR housekeeping modeled on aurora/bluefin's clean.yml: prune image
-# versions older than 90 days (keeping the newest 7 tagged) and orphaned
-# untagged layers, so the ghcr.io/aahsnr-work/halcyon package does not grow
-# without bound from the daily scheduled builds.
+# GHCR housekeeping: prune image versions older than 90 days (keeping the
+# newest 7 tagged) and orphaned untagged layers, so the package does not grow
+# without bound from the daily builds.
 on:
   schedule:
     - cron: "15 0 * * 0" # 0015 UTC on Sundays
@@ -17,7 +16,7 @@ concurrency:
 jobs:
   delete-older-than-90:
     name: Prune old GHCR versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       packages: write

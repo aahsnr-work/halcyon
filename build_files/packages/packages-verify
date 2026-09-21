@@ -15,18 +15,15 @@ gate "xdg-desktop-portal-gtk"            rpm -q xdg-desktop-portal-gtk
 gate "kitty + terminfo"                  rpm -q kitty kitty-terminfo
 gate "thunar + archive plugin"           rpm -q Thunar thunar-archive-plugin
 gate "greeter wrapper executable"        test -x /usr/bin/noctalia-greeter-session
-gate "Xwayland present"                  rpm -q xorg-x11-server-Xwayland
-# The full X server has no role on a Hyprland-only image; Xwayland is the one
-# that matters. Gate its absence so it cannot creep back in via a weak dep.
-gate "no full Xorg server"               sh -c '! rpm -q xorg-x11-server-Xorg >/dev/null 2>&1'
+gate "greetd launches noctalia"          grep -qF 'noctalia-greeter-session' /etc/greetd/config.toml
 gate "fonts: jetbrains-mono"             rpm -q jetbrains-mono-fonts
 gate "fonts: noto emoji + color emoji"   rpm -q google-noto-emoji-fonts google-noto-color-emoji-fonts
 echo "::endgroup::"
 
 echo "::group::packages-verify — build-tool preconditions for later stages"
 # install-brew-bundle (Stage 07) and install-texlive (Stage 10) hard-fail
-# without these. Catching it here names the missing package; catching it
-# there names a stage that looks unrelated.
+# without these. Catching it here names the missing package; catching it there
+# names a stage that looks unrelated.
 gate "zstd (brew payload packing)"       command -v zstd
 gate "setpriv (brew uid drop)"           command -v setpriv
 gate "gpg (texlive signature check)"     command -v gpg

@@ -39,15 +39,6 @@ Three places, all required:
 Each directory is a standalone src-layout package.
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -e './dump-to-markdown[dev]'
-.venv/bin/pytest dump-to-markdown
+just lint-python    # ruff: undefined names + syntax errors
+just test-python    # pytest for the packages that have suites
 ```
-
-`dump-to-markdown` and `rmi` have suites; `just test-python` runs both.
-
-**The build-time smoke test (`-h` / `--version`) is not sufficient on its
-own.** It never reaches the code that does real work — a missing `datetime`
-import shipped in `rmi` and only surfaced when a user actually trashed a file.
-`just check` now runs `python3 -m py_compile` over every module, which catches
-that class of bug; add a `tests/` directory for anything with meaningful
-side effects.

@@ -14,6 +14,8 @@ on:
 
 env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}" # do not edit
+  # Only this branch pushes and signs. Every other ref builds and verifies.
+  PUBLISH_BRANCH: container
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -22,29 +24,42 @@ concurrency:
 jobs:
   build_push:
     name: Build and push image
-    runs-on: ubuntu-latest
+    # Pinned on purpose: ubuntu-latest migrates to 26.04 between 2026-10-19 and
+    # 2026-11-19, and ublue-os/remove-unwanted-software@v9 breaks there.
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       contents: read
       packages: write
-      id-token: write
+      # No id-token: signing is key-based, there is no OIDC exchange.
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      # Colored stage banners for every step below. GitHub's log viewer
-      # renders the ANSI escapes in .github/log-helpers.sh, giving each stage
-      # a distinct visual block while scrolling the build log.
       - name: Log helpers
         run: |
           source .github/log-helpers.sh
           banner "halcyon build — run ${GITHUB_RUN_ID} on ${GITHUB_REF_NAME}"
           step "event: ${GITHUB_EVENT_NAME}; sha: ${GITHUB_SHA::7}"
-          step "actions cache/runner ready"
 
-      # Copr's download CDN intermittently 504s on repodata; poll until every
-      # consumed COPR answers 200 (up to ~30 min) — consumed during the
-      # transition (Hyprland/zen/desktop) AND for the p03 kernel (Stage K1).
+      # Explicit and logged, so "why did nothing get pushed?" is answered at the
+      # top of the run instead of by reading `if:` expressions.
+      - name: Decide whether this run publishes
+        id: publish
+        run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Publish gate"
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ] && [ "${GITHUB_REF}" = "refs/heads/${PUBLISH_BRANCH}" ]; then
+            ok "event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF} → this run pushes and signs"
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+          else
+            warn "event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF} → build only (publish branch: ${PUBLISH_BRANCH})"
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Wait for Copr metadata availability
         run: |
           set -euo pipefail
@@ -96,20 +111,15 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
-      - name: Install shellcheck
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq shellcheck
-
-      # Both syntax gates, not just `check`. A scheduled build used to be able
-      # to go red on a shellcheck regression that landed via a path-ignored
-      # push, because only lint.yml ran `just lint` and only on PR/push.
       - name: Check Just + shell syntax
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
           banner "Stage 3/7 — just check + just lint"
+          command -v shellcheck >/dev/null 2>&1 || {
+            step "shellcheck not preinstalled — installing"
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          }
           just check && ok "just check passed"
           just lint && ok "just lint passed"
 
@@ -118,7 +128,6 @@ jobs:
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 4/7 — Resolve image identity"
           IMAGE_NAME=$(just image_name)
           ok "IMAGE_NAME=${IMAGE_NAME}"
           echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_ENV"
@@ -141,13 +150,12 @@ jobs:
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
           ok "registry=${IMAGE_REGISTRY,,}  image=${IMAGE_NAME,,}"
 
-      # This actually builds the container image
       - name: Build Image
         id: build-image
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 5/7 — podman build (all 18 stages)"
+          banner "Stage 4/7 — podman build (all 18 stages)"
           echo "::group::just build ${IMAGE_NAME} ${DEFAULT_TAG}"
           just build \
             "${IMAGE_NAME}" \
@@ -155,27 +163,21 @@ jobs:
           echo "::endgroup::"
           ok "image built"
 
-      # The verify/ suite tests properties no in-build gate covers (chezmoi
-      # --global wiring and timer semantics, the ujust --choose chooser
-      # plumbing, the brew payload end state from OUTSIDE the build). It was
-      # written, committed and then never executed by anything — wire it here.
+      # verify/ tests properties no in-build gate covers (chezmoi --global wiring,
+      # ujust --choose plumbing, the brew payload seen from outside the build).
       - name: Image-side verification suite
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 6/7 — Image-side verification (verify/)"
+          banner "Stage 5/7 — Image-side verification (verify/)"
           just verify-image "${IMAGE_NAME}" "${DEFAULT_TAG}"
           ok "all image-side verifications passed"
 
-      # Distinctive package census: run the freshly built image and write the
-      # report to the run summary (GITHUB_STEP_SUMMARY) plus a ::notice::
-      # annotation. The census is also baked into the image at
-      # /usr/share/halcyon/package-count by build_files/finish/final-verify.
       - name: Package count report
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 7/7 — Package census + tags + push + sign"
+          banner "Stage 6/7 — Package census + tags"
           INFO=$(podman run --rm --entrypoint /bin/bash "${IMAGE_NAME}:${DEFAULT_TAG}" -c \
             'echo "count=$(rpm -qa | wc -l)"; echo "kernel=$(rpm -q --qf "%{VERSION}-%{RELEASE}.%{ARCH}" kernel-p03 2>/dev/null || echo n/a)"')
           COUNT=$(sed -n 's/^count=//p' <<< "$INFO")
@@ -218,10 +220,8 @@ jobs:
             "${ALIAS_TAGS}"
           ok "all alias tags applied"
 
-      # Push + sign only on branch pushes (not PRs) — same semantics as the
-      # BlueBuild era action had.
       - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
+        if: steps.publish.outputs.publish == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -229,14 +229,14 @@ jobs:
           password: ${{ github.token }}
 
       - name: Push To GHCR
-        if: github.event_name == 'push'
+        if: steps.publish.outputs.publish == 'true'
         id: push-image
         env:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Push to GHCR"
+          banner "Stage 7/7 — Push to GHCR"
           echo "::group::podman push (one tag at a time)"
           for tag in ${ALIAS_TAGS}; do
             step "pushing ${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
@@ -256,16 +256,21 @@ jobs:
             echo "digest: \`${digest}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Cosign 3 writes signatures as OCI referrers by default. containers/image
+      # (podman, skopeo, bootc) only reads the legacy sha256-<digest>.sig tag, so a
+      # default cosign 3 signature is invisible to `bootc switch` even though
+      # `cosign verify` passes. The release is pinned so a future default (or the
+      # removal of these flags in Cosign 4) cannot change behaviour silently.
       - name: Install Cosign
-        if: github.event_name == 'push'
-        # Exact release pin: sigstore publishes no bare v4 major ref (only
-        # v2/v3), so @v4 fails workflow resolution with "unable to find
-        # version v4" (verified via git ls-remote, 2026-09-21).
+        if: steps.publish.outputs.publish == 'true'
+        # v4.1.2, not a bare @v4: sigstore publishes no v4 major ref (only
+        # v2/v3), so @v4 fails workflow resolution — hit live in CI.
         uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
-      # Sign the manifest digest once — every alias tag shares it.
-      - name: Sign container image
-        if: github.event_name == 'push'
+      - name: Sign container image (legacy sigstore attachment)
+        if: steps.publish.outputs.publish == 'true'
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           COSIGN_PASSWORD: ""
@@ -274,9 +279,29 @@ jobs:
           set -euo pipefail
           source .github/log-helpers.sh
           banner "Cosign sign"
-          cosign sign --key env://COSIGN_PRIVATE_KEY --yes \
+          cosign sign --yes \
+            --new-bundle-format=false \
+            --use-signing-config=false \
+            --registry-referrers-mode=legacy \
+            --key env://COSIGN_PRIVATE_KEY \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
           ok "signed ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+
+      # Default `cosign verify` accepts BOTH formats, so it cannot detect this
+      # regression. Forcing the legacy lookup proves the signature exists where
+      # bootc will look, and that SIGNING_SECRET matches the cosign.pub shipped
+      # in the image.
+      - name: Verify signature in the format bootc reads
+        if: steps.publish.outputs.publish == 'true'
+        env:
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Cosign verify (legacy format, repo cosign.pub)"
+          cosign verify --key cosign.pub --new-bundle-format=false \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+          ok "legacy signature verified against cosign.pub"
 
       - name: Done
         if: always()

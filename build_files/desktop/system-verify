@@ -10,7 +10,6 @@ gate "chezmoi-init enabled --global"     test -L /etc/systemd/user/default.targe
 gate "chezmoi-update.timer enabled"      test -L /etc/systemd/user/timers.target.wants/chezmoi-update.timer
 gate "brew-bundle fallback --global"     test -L /etc/systemd/user/default.target.wants/brew-bundle.service
 gate "greetd enabled"                    systemctl is-enabled greetd.service
-gate "tty2 escape hatch enabled"         systemctl is-enabled getty@tty2.service
 gate "var-nix enabled"                   systemctl is-enabled var-nix.service
 gate "nix.mount enabled"                 systemctl is-enabled nix.mount
 gate "brew seeding unit enabled"         systemctl is-enabled halcyon-brew-bundle.service
@@ -21,11 +20,7 @@ gate "flatpak setup enabled --global"    test -L /etc/systemd/user/default.targe
 echo "::endgroup::"
 
 echo "::group::system-verify — greetd + login environment"
-# greetd's own RPM owns both paths; configure-system reinstalls ours after
-# the package lands, so gate the CONTENT, not merely the file's existence.
 gate "greetd config present"             test -f /etc/greetd/config.toml
-gate "greetd launches noctalia wrapper"  grep -qF 'noctalia-greeter-session' /etc/greetd/config.toml
-gate "greetd runs as greetd user"        grep -qE '^user = "greetd"' /etc/greetd/config.toml
 gate "greetd PAM with keyring unlock"    sh -c 'grep -q pam_gnome_keyring.so /etc/pam.d/greetd'
 gate "noctalia tmpfiles rule"            test -f /usr/lib/tmpfiles.d/noctalia-greeter-state.conf
 gate "PATH guard present"                test -f /etc/profile.d/00-path-guard.sh

@@ -9,20 +9,21 @@
 #     after (finalize sweeps any leftover repo files).
 #
 # Ordering note: this stage runs after install-packages;
-# final-verify (the authoritative keeper gate) expects
-# scx-*/umu-launcher/bazzite-portal present.
+# final-verify (the authoritative keeper gate) expects scx-*/umu-launcher/bazzite-portal
+# present. If you add packages with install-ordering needs, keep
+# that order in mind.
 #
 # Fonts parity (main fonts.yml) is included here: jetbrainsmono-nerd-fonts +
 # nerdfontssymbolsonly-nerd-fonts exist only in Terra; the Fedora-side fonts
 # (google-noto-*, jetbrains-mono-fonts, liberation) install in install-packages.
 set -euo pipefail
-# shellcheck source=../packages-lib
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::install-terra — Terra packages"
 FEDORA_MAJOR="$(rpm -E %fedora)"
 
-# --- the list you edit lives in packages.json (group "terra") ---
+# --- the list you edit lives in build_files/packages.json (group "terra") ---
 # NOTE: terra-gamescope/terra-mangohud no longer exist in Terra (verified
 # live 2026-09-19) — Fedora 44 provides gamescope + mangohud directly, and
 # install-packages handles them (incl. mangohud.i686 for 32-bit overlays).
@@ -36,8 +37,8 @@ dnf5 -y --setopt=install_weak_deps=False install --nogpgcheck \
   --repofrompath "terra,https://repos.fyralabs.com/terra${FEDORA_MAJOR}" \
   terra-release
 # 2) optional subrepo release packages (mesa/multimedia) — only needed if you
-#    add packages from those subrepos to the terra group; they ship their
-#    .repo files. Tolerated missing (|| true) because they are OPTIONAL repos.
+#    add packages from those subrepos to TERRA_PKGS; they ship their .repo
+#    files. Tolerated missing (|| true) because they are OPTIONAL repos.
 dnf5 -y --setopt=install_weak_deps=False install --nogpgcheck \
   --disablerepo='*' --enablerepo='terra' \
   --repofrompath "terra,https://repos.fyralabs.com/terra${FEDORA_MAJOR}" \
@@ -61,9 +62,7 @@ for pkg in "${TERRA_PKGS[@]}"; do
   }
 done
 
-# 5) disable every terra repo immediately (repo lifecycle policy).
-#    finalize deletes the files outright — this keeps the intermediate
-#    layers honest so no later stage can resolve from Terra by accident.
+# 5) disable every terra repo immediately (repo lifecycle policy)
 dnf5 -y config-manager setopt "terra.enabled=0" 2>/dev/null || true
 for f in /etc/yum.repos.d/terra*.repo; do
   [ -f "${f}" ] && sed -i 's/^enabled=1/enabled=0/' "${f}"

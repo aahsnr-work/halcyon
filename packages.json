@@ -5,7 +5,7 @@
     "groups": {
       "fedora-core": "Desktop/base packages from Fedora repos (install-packages). The @custom-environment comps group stays hardcoded in install-packages (comps groups are not catalog entries).",
       "fedora-hardware": "Firmware/microcode/audio/32-bit-GL support (install-packages).",
-      "fedora-editors": "Editors and language runtimes from Fedora (install-packages). Split out of vendor-apps, which they were never resolved from — they only worked because they happened to install inside the vscode/brave repo window. NOTE: the F44 names are nodejs24/nodejs24-npm (verified 2026-09-20 — plain nodejs/npm do not resolve on Fedora 44).",
+      "fedora-editors": "Editors and language runtimes from Fedora (install-packages). Split out of vendor-apps, which they were never resolved from — they only worked because they installed inside the vscode/brave repo window.",
       "hyprland-copr": "Resolved from COPR lionheartp/Hyprland (install-packages). Weak deps are OFF — list every stack weak dep explicitly.",
       "gaming": "RPM Fusion + Fedora gaming packages (install-packages).",
       "bazaar-copr": "Resolved from COPR ublue-os/packages (install-packages).",
@@ -16,11 +16,11 @@
       "nix": "Winter-pattern nix packages (install-nix).",
       "flatpak": "The flatpak stack itself (setup-flatpaks); libnotify covers notify-send.",
       "ujust-copr": "ublue-os-just machinery + uupd from COPR ublue-os/packages (setup-ujust).",
-      "ujust-fedora": "Fedora companions of the ujust tooling (setup-ujust). gum backs Choose/ugum in ujust.sh; grubby + grub2-tools back every kernel-arg and GRUB recipe; ethtool backs wol. The wget BINARY on F44 comes from wget2-wget (verified 2026-09-20 — no package named just wget exists).",
+      "ujust-fedora": "Fedora companions of the ujust tooling (setup-ujust). grubby backs the kernel-arg recipes (and hard-requires grub2-tools). ugum falls back to fzf when gum is absent, so gum is NOT required. NOTE: the wget BINARY on F44 comes from wget2-wget (verified 2026-09-20 — no package named just wget exists on Fedora 44).",
       "terra": "Resolved EXCLUSIVELY from Terra repos (install-terra uses --disablerepo='*'). terra-release/-mesa/-multimedia are repo bootstrap and stay hardcoded there.",
       "exclude-all": "The 'exclude' block drives remove-packages (Stage 2); entries are resolved through rpm -qa first, so absent names are tolerated."
     },
-    "build-tool-dependencies": "zstd, util-linux-core (setpriv), gcc-c++, git, curl and jq are hard preconditions of install-brew-bundle; gnupg2 is a hard precondition of install-texlive's signature verification. They are listed in fedora-core deliberately — do not remove them as 'unused'."
+    "build-tool-dependencies": "zstd, util-linux-core (setpriv), gcc-c++, git, curl and jq are hard preconditions of install-brew-bundle; gnupg2 is a hard precondition of install-texlive's signature verification. They are in fedora-core deliberately and gated by packages-verify — do not remove them as 'unused'."
   },
   "all": {
     "include": {
@@ -96,6 +96,7 @@
         "xdg-desktop-portal",
         "xdg-user-dirs",
         "xdg-user-dirs-gtk",
+        "xorg-x11-server-Xorg",
         "xorg-x11-server-Xwayland",
         "xorg-x11-xauth",
         "zathura",
@@ -212,7 +213,7 @@
       "nix": ["nix", "nix-daemon"],
       "flatpak": ["flatpak", "flatpak-selinux", "libnotify"],
       "ujust-copr": ["uupd", "ublue-os-just", "ublue-os-update-services"],
-      "ujust-fedora": ["glow", "grub2-tools", "grubby", "gum", "stress-ng"],
+      "ujust-fedora": ["glow", "grubby", "stress-ng"],
       "terra": [
         "zed",
         "scx-scheds",
@@ -254,6 +255,7 @@
         "steamdeck-backgrounds",
         "steamdeck-gnome-presets",
         "waydroid",
+        "fastfetch",
         "firefox",
         "firefox-langpacks",
         "gnome-shell",

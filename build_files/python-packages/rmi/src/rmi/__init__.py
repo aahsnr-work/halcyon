@@ -95,7 +95,7 @@ def print_message(color: str, message: str) -> None:
 
 
 def print_error(message: str) -> None:
-    """Print a colored message to stderr."""
+    """Print a colored error message to stderr."""
     print(f"{COLOR_RED}{message}{COLOR_RESET}", file=sys.stderr)
 
 

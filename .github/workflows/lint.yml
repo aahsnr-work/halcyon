@@ -1,8 +1,7 @@
 ---
 name: lint
-# PR gate modeled on bazzite's just-syntax-check.yml, widened to run every
-# host-side gate the build workflow runs before podman, so PRs fail here in
-# seconds instead of 40 minutes in.
+# PR gate: every host-side check, so PRs fail here in seconds instead of
+# 40 minutes into the image build.
 on:
   pull_request:
   push:
@@ -19,14 +18,22 @@ concurrency:
 jobs:
   check:
     name: Just + shell syntax
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install just
         uses: extractions/setup-just@v4
+
+      - name: Ensure shellcheck
+        run: |
+          command -v shellcheck >/dev/null 2>&1 || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          }
 
       - name: Check Just + bash syntax
         run: |
@@ -42,51 +49,68 @@ jobs:
 
   github-audit:
     name: .github audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install PyYAML
         run: python3 -m pip install --quiet pyyaml
 
-      # verify-github.sh checks required files, YAML parseability, cron
-      # syntax, action pins and the log helpers. It was written and then
-      # never run by anything — it is host-side and takes seconds.
       - name: Audit .github tree
         run: |
           source .github/log-helpers.sh
           banner "verify-github"
           bash verify/verify-github.sh
 
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Expression/syntax/input checking only. Shell inside `run:` is skipped
+      # (-shellcheck=) because our steps deliberately word-split and source
+      # log-helpers.sh, which would produce noise, not signal.
+      - name: Lint workflows
+        run: |
+          docker run --rm -v "${PWD}:/repo" --workdir /repo \
+            rhysd/actionlint:1.7.12 -color -shellcheck= -pyflakes=
+
   python:
     name: Python helpers
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
-      # `just check` compiles every module (catches missing imports that the
-      # `-h` smoke test never reaches); this job runs the real suites.
-      - name: Compile + test python helpers
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      # ruff catches undefined names; the -h smoke test and py_compile cannot.
+      - name: Static-check helpers
         run: |
           source .github/log-helpers.sh
-          banner "python helpers"
-          cd build_files/python-packages
-          python3 -m venv .venv
-          .venv/bin/pip install --quiet --upgrade pip
-          status=0
-          for pkg in dump-to-markdown rmi; do
-            echo "::group::pytest — ${pkg}"
-            .venv/bin/pip install --quiet -e "./${pkg}[dev]"
-            .venv/bin/pytest "${pkg}" || status=1
-            echo "::endgroup::"
-          done
-          exit "$status"
+          banner "just lint-python"
+          just lint-python && ok "no undefined names / syntax errors"
+
+      - name: Run helper test suites
+        run: |
+          source .github/log-helpers.sh
+          banner "just test-python"
+          just test-python && ok "python suites passed"

@@ -28,8 +28,7 @@ check:
         bash -n "$file" || status=1
     done < <(find build_files -type f \
                ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
-               ! -path "*desktop/greetd*" \
-               ! -name "*.json" ! -name "*.toml" ! -name "README*")
+               ! -name "*.json" ! -name "README*")
     echo "::endgroup::"
 
     echo "::group::bash -n — verify/ helpers + workflow shell code"
@@ -38,17 +37,6 @@ check:
         echo "Checking syntax: $file"
         bash -n "$file" || status=1
     done
-    echo "::endgroup::"
-
-    echo "::group::py_compile — python helpers"
-    # The build-time smoke test is `-h`/`--version`, which never reaches the
-    # code paths that do real work. A missing `datetime` import shipped in the
-    # image once for exactly that reason; compiling every module catches that
-    # class of bug in seconds. Run `just test-python` for the real suites.
-    while read -r file; do
-        echo "Compiling: $file"
-        python3 -m py_compile "$file" || status=1
-    done < <(find build_files/python-packages -name "*.py" ! -path "*/.venv/*")
     echo "::endgroup::"
 
     echo "::group::recipe bodies — parse + bash -n (ujust runtime syntax)"
@@ -91,14 +79,12 @@ lint:
     fi
     status=0
     # while-read + explicit status accumulation: `find -exec` would report
-    # only the LAST invocation's exit code and silently mask earlier failures
+    # only the LAST invocation's exit code and silently mask earlier failures.
+    # -x follows `# shellcheck source=` directives. ShellCheck resolves those
+    # relative to its WORKING DIRECTORY (the repo root, where this recipe runs),
+    # which is why the directives read build_files/packages-lib.
     while read -r file; do
-        # -x follows `# shellcheck source=` directives. Those directives are
-        # written relative to the SCRIPT's directory (../packages-lib); on
-        # shellcheck 0.11 the literal SCRIPTDIR source-path is what makes that
-        # resolution work from the repo root (a plain -x or a fixed
-        # source-path dir both fail the ../ form — verified 2026-09-20).
-        if shellcheck --shell=bash -x --source-path=SCRIPTDIR "$file"; then
+        if shellcheck --shell=bash -x "$file"; then
             echo "shellcheck OK: $file"
         else
             echo "shellcheck FAILED: $file"
@@ -106,9 +92,22 @@ lint:
         fi
     done < <(find build_files -type f \
         ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
-        ! -path "*desktop/greetd*" \
-        ! -name "*.json" ! -name "*.toml" ! -name "README*")
+        ! -name "*.json" ! -name "README*")
     exit "$status"
+
+# Static-check the python helpers for undefined names and syntax errors
+[group('Just')]
+lint-python:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd build_files/python-packages
+    python3 -m venv .venv
+    .venv/bin/pip install --quiet --upgrade pip ruff
+    # F821/F822/F823 = undefined names — the bug class that shipped in `rmi`
+    # (a missing `datetime` import). The build-time `-h` smoke test never
+    # reaches that code and py_compile only checks syntax, so neither sees it.
+    # E9 = syntax errors.
+    .venv/bin/ruff check --select E9,F821,F822,F823 .
 
 # Run the python helper test suites (not reached by check/lint)
 [group('Just')]

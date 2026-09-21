@@ -1,147 +1,138 @@
 #!/usr/bin/env bash
-# verify/verify-github.sh — HOST-side audit of the .github folder (task:
-# ".github files must be correctly placed, error-free, and complete").
-# Checks: required files present, YAML parses, referenced actions exist and
-# are reasonably current, cron expressions valid, run-step shell snippets are
-# bash-syntax-clean, and the log helper sources cleanly.
-# Optional: if `actionlint` is on PATH it is run over every workflow too.
+# verify/verify-github.sh — HOST-side audit of the .github folder.
+# Checks: required files, retired files stay retired, YAML parses, cron syntax,
+# every `uses:` is pinned (vN tag or full SHA — Renovate rewrites tags to SHAs,
+# so no specific major is hardcoded here), runners are pinned, the cosign
+# legacy-format guard is present, and the log helper sources cleanly.
+# Optional: runs actionlint if it is on PATH.
 set -uo pipefail
 
 fail=0
-pass() { printf '  PASS  %s\n' "$1"; }
+pass()  { printf '  PASS  %s\n' "$1"; }
 failf() { printf '  FAIL  %s\n' "$1"; fail=1; }
-info() { printf '  INFO  %s\n' "$1"; }
+info()  { printf '  INFO  %s\n' "$1"; }
+warnf() { printf '  WARN  %s\n' "$1"; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GH="${ROOT}/.github"
+WF=("${GH}"/workflows/*.yml)
 
-echo "::group::verify-github — required files (image-template/main parity)"
-for f in workflows/build.yml dependabot.yml renovate.json5 log-helpers.sh \
-         workflows/lint.yml workflows/clean.yml semantic.yml \
-         pull_request_template.md CODEOWNERS; do
+echo "::group::verify-github — required files"
+for f in workflows/build.yml workflows/lint.yml workflows/clean.yml \
+         workflows/semantic-pr.yml dependabot.yml renovate.json5 \
+         log-helpers.sh pull_request_template.md CODEOWNERS; do
   if [ -f "${GH}/${f}" ]; then pass ".github/${f}"; else failf ".github/${f} missing"; fi
 done
+if [ -e "${GH}/semantic.yml" ]; then
+  failf ".github/semantic.yml present — it configures a service that no longer runs; use workflows/semantic-pr.yml"
+else
+  pass "no dead .github/semantic.yml"
+fi
 echo "::endgroup::"
 
 echo "::group::verify-github — YAML parse + workflow structure"
-python_check() {
-  python3 - "$1" <<'PY'
-import sys
-try:
-    import yaml
-except ImportError:
-    sys.exit(3)
+if python3 -c 'import yaml' 2>/dev/null; then
+  for wf in "${WF[@]}"; do
+    name="$(basename "${wf}")"
+    if python3 - "${wf}" <<'PY'
+import sys, yaml
 docs = list(yaml.safe_load_all(open(sys.argv[1])))
-# workflows use a single doc; `---` leading marker is fine
-sys.exit(0 if docs else 1)
+sys.exit(0 if docs and docs[0] else 1)
 PY
-}
-for wf in "${GH}"/workflows/*.yml; do
-  name="$(basename "${wf}")"
-  if python3 -c 'import yaml' 2>/dev/null; then
-    if python_check "${wf}"; then
-      pass "${name}: YAML parses"
-    else
-      case "$?" in
-        3) info "${name}: PyYAML unavailable — skipped parse check" ;;
-        *) failf "${name}: YAML does not parse" ;;
-      esac
-    fi
-  else
-    info "PyYAML unavailable — skipping YAML parse checks"
-    break
-  fi
-  # every workflow must declare name/on/jobs
-  grep -q '^name:' "${wf}"   || failf "${name}: missing name:"
-  grep -q '^on:' "${wf}"     || failf "${name}: missing on: trigger"
-  grep -q '^jobs:' "${wf}"   || failf "${name}: missing jobs:"
-done
+    then pass "${name}: YAML parses"; else failf "${name}: YAML does not parse"; fi
+    grep -q '^name:' "${wf}" || failf "${name}: missing name:"
+    grep -q '^on:'   "${wf}" || failf "${name}: missing on: trigger"
+    grep -q '^jobs:' "${wf}" || failf "${name}: missing jobs:"
+  done
+else
+  info "PyYAML unavailable — skipped parse checks (pip install pyyaml)"
+fi
 echo "::endgroup::"
 
 echo "::group::verify-github — cron expressions"
-cron_field_ok() {
+cron_ok() {
   python3 - "$1" <<'PY'
 import re, sys
 c = sys.argv[1].split()
-ok = len(c) == 5 and all(re.fullmatch(r'[\d*,/\-A-Za-z]+', f) for f in c)
-sys.exit(0 if ok else 1)
+sys.exit(0 if len(c) == 5 and all(re.fullmatch(r'[\d*,/\-A-Za-z]+', f) for f in c) else 1)
 PY
 }
-cron_extract() { grep -hoP 'cron:[[:space:]]*"\K[^"#]*' "${GH}"/workflows/*.yml | sed 's/[[:space:]]*$//'; }
-cron_field_ok() {
-  python3 - "$1" <<'PY'
-import re, sys
-c = sys.argv[1].split()
-ok = len(c) == 5 and all(re.fullmatch(r'[\d*,/\-A-Za-z]+', f) for f in c)
-sys.exit(0 if ok else 1)
-PY
-}
-while read -r c; do
-  if cron_field_ok "${c}"; then pass "cron '${c}' well-formed"; else failf "cron '${c}' malformed"; fi
-done < <(cron_extract)
+while IFS= read -r c; do
+  if cron_ok "${c}"; then pass "cron '${c}' well-formed"; else failf "cron '${c}' malformed"; fi
+done < <(grep -hoP 'cron:[[:space:]]*"\K[^"#]*' "${WF[@]}" | sed 's/[[:space:]]*$//')
 echo "::endgroup::"
 
-echo "::group::verify-github — action references pinned to known majors"
-check_action() { # $1 file, $2 uses-line fragment, $3 expected major
-  if grep -q "uses: ${2}@v${3}\$" "${1}" || grep -qE "uses: ${2}@v${3}\b" "${1}"; then
-    pass "$(basename "$1"): ${2}@v${3}"
+echo "::group::verify-github — action references + runners"
+while IFS= read -r ref; do
+  case "${ref}" in ./*|docker://*) continue ;; esac
+  if [[ "${ref}" =~ ^[^@]+@([0-9a-f]{40}|v[0-9]+(\.[0-9]+){0,2})$ ]]; then
+    pass "${ref}"
   else
-    failf "$(basename "$1"): ${2} not at v${3}"
+    failf "${ref} — pin to a vN tag or a full commit SHA, never a branch"
   fi
-}
-check_action "${GH}/workflows/build.yml" "actions/checkout" 7
-check_action "${GH}/workflows/build.yml" "extractions/setup-just" 4
-check_action "${GH}/workflows/build.yml" "ublue-os/remove-unwanted-software" 9
-check_action "${GH}/workflows/build.yml" "docker/login-action" 4
-check_action "${GH}/workflows/build.yml" "sigstore/cosign-installer" 4
-check_action "${GH}/workflows/lint.yml" "actions/checkout" 7
+done < <(grep -hoP 'uses:\s*\K[^\s#]+' "${WF[@]}" | sort -u)
+
+if grep -nE 'runs-on:[[:space:]]*ubuntu-latest' "${WF[@]}" >/dev/null; then
+  failf "runs-on: ubuntu-latest found — pin ubuntu-24.04 (latest migrates to 26.04 Oct–Nov 2026)"
+else
+  pass "no unpinned ubuntu-latest runners"
+fi
+if grep -nE 'uses:[[:space:]]*blue-build/' "${WF[@]}" >/dev/null; then
+  failf "a workflow uses the blue-build action — this branch builds with podman via the Justfile"
+else
+  pass "no blue-build action in workflows"
+fi
 echo "::endgroup::"
 
-echo "::group::verify-github — embedded shell snippets"
-if bash -n "${GH}/log-helpers.sh" 2>/dev/null; then
-  pass "log-helpers.sh: bash -n clean"
+echo "::group::verify-github — build.yml invariants"
+B="${GH}/workflows/build.yml"
+if grep -q -- '--new-bundle-format=false' "${B}"; then
+  pass "cosign signs in the legacy format containers/image reads"
 else
-  failf "log-helpers.sh: bash -n FAILED"
+  failf "build.yml lacks --new-bundle-format=false — signed rebases will not verify"
 fi
-# source + call each helper once (colors off-screen but proves definitions)
+grep -q 'cosign verify --key cosign.pub --new-bundle-format=false' "${B}" \
+  && pass "legacy-format verify step present" \
+  || failf "legacy-format verify step missing (default verify accepts both formats and cannot catch this)"
+grep -q 'PUBLISH_BRANCH' "${B}" \
+  && pass "explicit publish gate present" \
+  || failf "publish gate missing — scheduled/dispatch runs would not push"
+if grep -q 'id-token:[[:space:]]*write' "${B}"; then
+  failf "id-token: write present — key-based signing needs no OIDC"
+else
+  pass "no unnecessary id-token permission"
+fi
+for copr in "catpieleaf/kernel-p03" "lionheartp/Hyprland" "ublue-os/packages" "sneexy/zen-browser"; do
+  grep -q "${copr}" "${B}" && pass "monitors ${copr}" || failf "missing COPR monitor for ${copr}"
+done
+echo "::endgroup::"
+
+echo "::group::verify-github — default branch (informational)"
+# Scheduled workflows run only from the repository's default branch.
+default_ref="$(git -C "${ROOT}" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+if [ -z "${default_ref}" ]; then
+  info "default branch unknown locally — confirm it is 'container' (Settings → Branches), or the daily cron will not run this workflow"
+elif [ "${default_ref}" = "origin/container" ]; then
+  pass "default branch is container — cron and manual dispatch use this workflow"
+else
+  warnf "default branch is ${default_ref#origin/}: the daily cron runs THAT branch's workflow, not this one"
+fi
+echo "::endgroup::"
+
+echo "::group::verify-github — log helpers"
+if bash -n "${GH}/log-helpers.sh" 2>/dev/null; then pass "log-helpers.sh: bash -n clean"; else failf "log-helpers.sh: bash -n FAILED"; fi
 if bash -c 'source "'"${GH}"'/log-helpers.sh" && banner t && step s && ok o && warn w >/dev/null 2>&1'; then
-  pass "log-helpers.sh: sources + helpers callable"
+  pass "log-helpers.sh sources and helpers are callable"
 else
   failf "log-helpers.sh: sourcing failed"
 fi
-# every run step that sources the helper must reference an existing file
-for wf in "${GH}"/workflows/*.yml; do
-  if grep -q 'source .github/log-helpers.sh' "${wf}" && [ ! -f "${GH}/log-helpers.sh" ]; then
-    failf "$(basename "${wf}"): sources a missing log-helpers.sh"
-  fi
-done
-pass "workflow helper references resolve"
-echo "::endgroup::"
-
-echo "::group::verify-github — COPR repodata polling configuration"
-if grep -q 'solopasha' "${GH}/workflows/build.yml"; then
-  failf "build.yml references obsolete solopasha COPR"
-else
-  pass "build.yml contains no obsolete solopasha COPR"
-fi
-for copr in "catpieleaf/kernel-p03" "lionheartp/Hyprland" "ublue-os/packages" "sneexy/zen-browser"; do
-  if grep -q "${copr}" "${GH}/workflows/build.yml"; then
-    pass "build.yml monitors ${copr}"
-  else
-    failf "build.yml missing COPR monitor for ${copr}"
-  fi
-done
 echo "::endgroup::"
 
 echo "::group::verify-github — actionlint (optional)"
 if command -v actionlint >/dev/null 2>&1; then
-  if actionlint -color=never "${GH}"/workflows/*.yml; then
-    pass "actionlint clean"
-  else
-    failf "actionlint reported problems"
-  fi
+  if actionlint -color=never -shellcheck= "${WF[@]}"; then pass "actionlint clean"; else failf "actionlint reported problems"; fi
 else
-  info "actionlint not installed — skipped (install: go install github.com/rhysd/actionlint/cmd/actionlint@latest)"
+  info "actionlint not installed — skipped"
 fi
 echo "::endgroup::"
 

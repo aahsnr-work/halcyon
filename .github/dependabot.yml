@@ -1,16 +1,17 @@
+# If the Renovate app is installed on this repo, delete this file: both bots
+# would open competing PRs for the same actions. Renovate (renovate.json5) also
+# tracks the Containerfile base image, which Dependabot's docker ecosystem has
+# historically not recognised under the name "Containerfile".
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
-
-  # The base image tag in the Containerfile is the single most impactful
-  # dependency in the repo and was previously tracked by nothing: a Fedora
-  # bump went unnoticed until a build broke.
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
+    # One PR instead of one per action.
+    groups:
+      github-actions:
+        patterns: ["*"]
+    # semantic-pr.yml rejects titles like "Bump x from y to z".
     commit-message:
-      prefix: "chore"
+      prefix: "chore(deps)"

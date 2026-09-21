@@ -10,11 +10,10 @@ gate "os-release PRETTY_NAME"            grep -q '^PRETTY_NAME="halcyon' /usr/li
 gate "os-release HOME_URL"               grep -q '^HOME_URL=https://github.com/aahsnr-work/halcyon' /usr/lib/os-release
 gate "image-info.json present"           test -s /usr/share/ublue-os/image-info.json
 gate "sigstore pubkey shipped"           test -s /etc/pki/containers/halcyon.pub
-# bootc's etc-usretc lint is fatal: a /usr/etc tree must never exist on a
-# base that already ships a real /etc.
 gate "no /usr/etc tree created"          sh -c '! test -e /usr/etc'
 gate "sigstore policy entry"             grep -q '"type": "sigstoreSigned"' /etc/containers/policy.json
 gate "policy keyPath matches shipped key" grep -q '"keyPath": "/etc/pki/containers/halcyon.pub"' /etc/containers/policy.json
+gate "policy matches signatures by repo" grep -q '"type": "matchRepository"' /etc/containers/policy.json
 gate "registries.d sigstore attachments" grep -q 'use-sigstore-attachments: true' /etc/containers/registries.d/halcyon.yaml
 gate "plymouth theme selected"           grep -q 'Theme=halcyon' /etc/plymouth/plymouthd.conf
 gate "plymouth theme file"               test -f /usr/share/plymouth/themes/halcyon/theme.plymouth

@@ -12,10 +12,10 @@ is included. Stdlib-only: no third-party runtime dependencies.
 
 ## Install
 
-halcyon bakes this into the built image (`/usr/bin/dump-to-markdown`) at
-build time via `build_files/apps/install-python-packages`, which installs
-every helper into the shared venv at `/usr/lib/halcyon-python`. For use on a
-dev machine, install it from this directory:
+halcyon bakes this into the built image (`/usr/bin/dump-to-markdown`) via
+`build_files/apps/install-python-packages`, which installs every helper into the
+shared venv at `/usr/lib/halcyon-python`. On a dev machine, install it from this
+repo:
 
 ```sh
 uv tool install ./build_files/python-packages/dump-to-markdown
@@ -23,7 +23,7 @@ uv tool install ./build_files/python-packages/dump-to-markdown
 pipx install ./build_files/python-packages/dump-to-markdown
 # or
 python3 -m pip install --user ./build_files/python-packages/dump-to-markdown
-```
+````
 
 ## Usage
 
@@ -61,3 +61,4 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 Or from the repo root: `just test-python`.
 
 Apache-2.0 — see the repo root `LICENSE`.
+

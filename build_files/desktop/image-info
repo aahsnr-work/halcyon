@@ -12,8 +12,7 @@ else
 fi
 # plymouth theme assets are generated from the baked astronaut wallpaper.
 # NOTE: ctx is flat per build_files subfolder — build-plymouth-assets lives in
-# desktop/ next to this script, NOT in branding/ (a stale /ctx/branding/ path
-# here used to abort the whole build with `no such file or directory`).
+# desktop/ next to this script, NOT in branding/.
 /ctx/desktop/build-plymouth-assets
 echo "::endgroup::"
 
@@ -30,14 +29,13 @@ cat >/usr/share/ublue-os/image-info.json <<EOF
 EOF
 chmod 0644 /usr/share/ublue-os/image-info.json
 
-# Signed-rebase support (ublue-os/config pattern): ship the cosign public
-# key plus a sigstore policy entry so `bootc switch
-# --enforce-container-sigpolicy ostree-image-signed:...` verifies out of the box.
+# Signed-rebase support: ship the cosign public key plus a sigstore policy
+# entry so `bootc switch --enforce-container-sigpolicy ostree-image-signed:...`
+# verifies out of the box.
 #
-# IMPORTANT: the key goes in /etc/pki/containers, NOT /usr/etc. fedora-bootc
-# ships a real /etc; creating a parallel /usr/etc tree is exactly what
-# `bootc container lint` flags as etc-usretc, which is a FATAL lint and used
-# to fail the build one stage after branding-verify passed.
+# The key goes in /etc/pki/containers, NOT /usr/etc: /usr/etc is bootc's
+# client-side view of the default /etc, must not be populated by images, and is
+# checked by `bootc container lint`.
 install -Dm0644 /ctx/cosign.pub /etc/pki/containers/halcyon.pub
 install -d /etc/containers/registries.d
 cat >/etc/containers/registries.d/halcyon.yaml <<'YAML'
@@ -46,13 +44,24 @@ docker:
     use-sigstore-attachments: true
 YAML
 # policy.json: require our sigstore signature for our image path, accept
-# everything else (the bootc default)
+# everything else (the bootc default).
+#
+# signedIdentity matchRepository is REQUIRED: cosign signs by digest
+# (repo@sha256:...) so the signed identity is the repository, but bootc pulls by
+# tag (repo:latest). The default matcher wants an exact identity match for
+# tag-referenced images and would reject the signature.
 cat >/etc/containers/policy.json <<'POLICY'
 {
     "default": [{"type": "insecureAcceptAnything"}],
     "transports": {
         "docker": {
-            "ghcr.io/aahsnr-work/halcyon": [{"type": "sigstoreSigned", "keyPath": "/etc/pki/containers/halcyon.pub"}]
+            "ghcr.io/aahsnr-work/halcyon": [
+                {
+                    "type": "sigstoreSigned",
+                    "keyPath": "/etc/pki/containers/halcyon.pub",
+                    "signedIdentity": {"type": "matchRepository"}
+                }
+            ]
         }
     }
 }

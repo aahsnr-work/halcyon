@@ -2,9 +2,7 @@
 Description=Auto-upgrade Brew packages
 After=local-fs.target
 After=network-online.target
-# See brew-update.service for why both conditions are present.
 ConditionPathIsSymbolicLink=/home/linuxbrew/.linuxbrew/bin/brew
-ConditionPathExists=/home/linuxbrew/.linuxbrew/bin/brew
 
 [Service]
 User=1000
@@ -12,8 +10,6 @@ Type=oneshot
 Environment=HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 Environment=HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew
 Environment=HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
-Environment=HOMEBREW_NO_ANALYTICS=1
-Environment=HOMEBREW_NO_ENV_HINTS=1
 ExecStart=/usr/bin/bash -c "/home/linuxbrew/.linuxbrew/bin/brew upgrade"
 # Unlink formulas that shadow system tools (ublue-os/brew design decision —
 # the same ExecStartPost guards ship in ublue-os/brew's brew-upgrade.service):

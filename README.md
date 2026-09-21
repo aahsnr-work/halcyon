@@ -33,6 +33,14 @@ systemctl reboot
 On a bootc system: `sudo bootc switch ghcr.io/aahsnr-work/halcyon:latest`.
 Or from the running system: `ujust rebase-to-custom`.
 
+**Signatures.** Images are signed with Cosign in the _legacy_ `.sig`
+attachment format, because that is the only format containers/image (podman,
+skopeo, bootc) can discover. Cosign 3 defaults to a newer referrer format that
+`cosign verify` accepts but `bootc` cannot see; the workflow forces the legacy
+format and verifies it after signing. The image ships the public key at
+`/etc/pki/containers/halcyon.pub` and a `sigstoreSigned` policy for
+`ghcr.io/aahsnr-work/halcyon`.
+
 ---
 
 ## What this image is
@@ -48,7 +56,6 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
 - **Desktop:** `hyprland-git`, `noctalia-git`, `noctalia-greeter-git`,
   `xdg-desktop-portal-{hyprland,gtk}` from COPR `lionheartp/Hyprland`;
   greetd login (tty2 escape hatch); kitty, thunar, papers, gnome-keyring.
-  Xwayland only — no full Xorg server.
 - **Gaming:** `steam` (with the bazzite-steam wrappers and desktop-entry
   wiring), `gamescope`, `mangohud` (+i686), `gamemode`, `lutris`,
   `scx-scheds`/`scx-tools`, `umu-launcher`, `bazaar`, `bazzite-portal`,
@@ -58,14 +65,14 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
   TeX Live and a Python helper family baked at build time.
 - **Tooling:** the former brew formulas as RPMs (bat, eza, fzf, lazygit,
   ripgrep, starship, yazi, zellij, …) **plus a small baked Homebrew payload**
-  (only `bun`, `pixi` and `opencode` — the three formulas Fedora and Terra do
-  not ship; brewed at build time into `/usr/share/halcyon/brew-bundle.tar.zst`,
-  seeded pre-login offline by `halcyon-brew-bundle.service`), chezmoi (Fedora
-  RPM) wired to
+  — only `bun`, `pixi` and `opencode`, the formulas Fedora and Terra do not
+  ship — brewed at build time into `/usr/share/halcyon/brew-bundle.tar.zst`
+  and seeded pre-login, offline, by `halcyon-brew-bundle.service`. chezmoi
+  (Fedora RPM) is wired to
   [aahsnr-configs/dotfiles](https://github.com/aahsnr-configs/dotfiles)
   (first-login init + update timer, blue-build module semantics), nix via the
-  [fu5ha/winter](https://github.com/fu5ha/winter) bind-mount pattern,
-  and ujust/uupd (`ublue-os-just` + `uupd`) with curated Bazzite recipes.
+  [fu5ha/winter](https://github.com/fu5ha/winter) bind-mount pattern, and
+  ujust/uupd (`ublue-os-just` + `uupd`) with curated Bazzite recipes.
 - **Flatpak:** package + **flathub user repo only** (no system flathub, no
   Fedora flatpaks); four transition apps install per-user at first login —
   everything else is native RPM.
@@ -74,13 +81,12 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
 
 ## Repo structure
 
-`build_files/` is organized into one folder per build phase; the
-**Containerfile is the single source of ordering truth** — the folders carry
-no numbering of their own.
+`build_files/` has one folder per build phase; the **Containerfile is the
+single source of ordering truth** — the folders carry no numbering.
 
 ```
-├── Containerfile              # 18 RUN stages + hermetic bootc lint
-├── Justfile                   # check / fix / lint / test-python / build / verify-image
+├── Containerfile              # 18 RUN stages (banners 00–17) + hermetic bootc lint
+├── Justfile                   # check / lint / lint-python / test-python / build / verify-image
 ├── halcyon.env                # dotenv consumed by the Justfile
 ├── packages.json              # SINGLE SOURCE OF TRUTH for every dnf/flatpak package
 ├── cosign.pub                 # public signing key (shipped to /etc/pki/containers)
@@ -94,18 +100,14 @@ no numbering of their own.
 │   ├── brew/                  #   install-brew-bundle + brew-verify
 │   ├── runtime/               #   install-nix, setup-flatpaks, setup-ujust + verifies
 │   ├── apps/                  #   obsidian/zotero/pyprland/texlive/python + verify
-│   ├── desktop/               #   configure-system, image-info, plymouth, greetd/
+│   ├── desktop/               #   configure-system, image-info, plymouth + verifies
 │   ├── finish/                #   build-initramfs, finalize, final-verify
 │   └── python-packages/       #   11 stdlib-only src-layout Python tools
-├── system_files/
-│   └── shared/                # root overlay COPYed into the image
-│       ├── etc/               #   pam, profile.d, environment.d, …
-│       └── usr/               #   units, tmpfiles, ujust modules, plymouth, /usr/bin
-└── verify/                    # image-side suites run by CI against the built image
+├── system_files/shared/       # root overlay COPYed into the image
+└── verify/                    # image-side suites CI runs against the built image
 ```
 
-Build order and per-level verification are visible in `Containerfile`; every
-third-party repo is enabled only inside the stage that consumes it and
+Every third-party repo is enabled only inside the stage that consumes it and
 disabled immediately after; `finalize` sweeps any leftovers so the shipped
 image carries Fedora repos only.
 
@@ -156,27 +158,33 @@ Rules the stages enforce while consuming the catalog:
 - the comps group `@custom-environment` and the Terra repo-bootstrap packages
   (`terra-release*`) stay in their scripts — they are not catalog entries;
 - a few entries exist purely as **build-tool preconditions** (`zstd`,
-  `util-linux-core`, `gnupg2`, `jq`, `gcc-c++`) — `packages-verify` gates
-  them so they cannot be pruned as "unused".
+  `util-linux-core`, `gnupg2`, `jq`, `gcc-c++`) — `packages-verify` gates them
+  so they cannot be pruned as "unused".
 
 ---
 
 ## Build & CI
 
 - `lint.yml` (PR, push, manual): `just check` + `just lint`, the `.github`
-  audit (`verify/verify-github.sh`), and the Python helper test suites.
+  audit (`verify/verify-github.sh`), actionlint, ruff (undefined names) and the
+  Python helper test suites.
+- `semantic-pr.yml`: validates PR titles against Conventional Commits.
 - `build.yml` (daily cron 08:00 UTC, push, PR, manual): polls the consumed
-  COPRs for healthy metadata, frees runner disk, runs both syntax gates,
-  builds with `podman build --pull`, runs the **image-side verify suite**
-  (`verify/verify-{brew,chezmoi,ujust}.sh`) against the built image, writes a
-  **package-count report** to the run summary, then signs with cosign
-  (`SIGNING_SECRET`) and publishes to GHCR.
+  COPRs, frees runner disk, runs both syntax gates, builds with
+  `podman build --pull`, runs the **image-side verify suite**
+  (`verify/verify-{brew,chezmoi,ujust}.sh`), writes a package-count report, and
+  — only on the `container` branch and never on PRs — pushes to GHCR, signs
+  with Cosign (legacy format) and verifies the signature.
+- **Scheduled runs only fire from the repository's default branch.** For the
+  daily rebuild to run _this_ workflow, `container` must be the default branch
+  (Settings → Branches).
+- Workflows are pinned to `ubuntu-24.04`. `ubuntu-latest` migrates to 26.04
+  between 2026-10-19 and 2026-11-19; test `ubuntu-26.04` deliberately first.
 - Local test build: `just build localhost/halcyon latest`, then
   `just verify-image localhost/halcyon latest`.
-- OCI labels (`org.opencontainers.image.*`) are set from
-  `--build-arg IMAGE_VERSION=<fedora>.<date>` and `SOURCE_SHA=<git sha>`
-  (CI supplies both). `bootc container lint` runs network-isolated as the
-  final gate.
+- OCI labels (`org.opencontainers.image.*`) come from
+  `--build-arg IMAGE_VERSION=<fedora>.<date>` and `SOURCE_SHA=<git sha>`.
+  `bootc container lint` runs network-isolated as the final gate.
 
 ---
 

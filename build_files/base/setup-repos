@@ -16,10 +16,10 @@
 # COPRs and vendor repos (lionheartp, sneexy, ublue-os/packages, catpieleaf,
 # terra, vscode, brave) are handled per-use in their own stages.
 #
-# jq is installed HERE and not later: packages-lib (sourced by every stage
-# from Stage 02 onward, including remove-packages) parses packages.json with
-# it. Relying on the base image to ship jq is an unstated dependency that
-# breaks silently on a Fedora bump.
+# jq is installed HERE because packages-lib (sourced from Stage 02 onward)
+# parses packages.json with it. The base image happens to ship jq today; this
+# makes that an explicit dependency instead of an accident that would break
+# silently on a base change.
 set -euo pipefail
 echo "::group::setup-repos — build tooling bootstrap"
 dnf5 -y --setopt=install_weak_deps=False install \

@@ -8,7 +8,7 @@
 # ship via the system_files/shared overlay (root COPY); this stage only
 # installs packages, registers imports, and wires the update timer.
 set -euo pipefail
-# shellcheck source=../packages-lib
+# shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::setup-ujust — ublue-os-just + uupd"
