@@ -258,7 +258,10 @@ jobs:
 
       - name: Install Cosign
         if: github.event_name == 'push'
-        uses: sigstore/cosign-installer@v4
+        # Exact release pin: sigstore publishes no bare v4 major ref (only
+        # v2/v3), so @v4 fails workflow resolution with "unable to find
+        # version v4" (verified via git ls-remote, 2026-09-21).
+        uses: sigstore/cosign-installer@v4.1.2
 
       # Sign the manifest digest once — every alias tag shares it.
       - name: Sign container image
