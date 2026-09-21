@@ -4,3 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+
+  # The base image tag in the Containerfile is the single most impactful
+  # dependency in the repo and was previously tracked by nothing: a Fedora
+  # bump went unnoticed until a build broke.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"

@@ -9,7 +9,7 @@
 # per-user at first login (MIGRATION §8.1: they become monorepo RPMs later;
 # flatpak state lives in /var/home anyway).
 set -euo pipefail
-# shellcheck source=build_files/packages-lib
+# shellcheck source=../packages-lib
 source /ctx/packages-lib
 packages_validate
 echo "::group::setup-flatpaks — flatpak package + user-repo wiring"

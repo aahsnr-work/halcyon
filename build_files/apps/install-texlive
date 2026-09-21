@@ -22,9 +22,13 @@ echo "::group::install-texlive — download installer"
 echo "--- Fetching install-tl-unx.tar.gz ---"
 # install-tl verifies downloads against TeX Live's GPG signatures by default
 # (install-tl manual) as long as gpg is present — keep it that way; never pass
-# --no-verify-downloads.
+# --no-verify-downloads. gnupg2 is an explicit packages.json entry for exactly
+# this reason: without it the installer silently downgrades to unverified.
 if ! command -v gpg >/dev/null 2>&1; then
-  echo "  WARN  gpg not found in PATH — install-tl signature verification will be skipped"
+  echo "  FAIL  gpg not found in PATH — install-tl would skip signature verification" >&2
+  echo "        gnupg2 must be installed by install-packages before this stage" >&2
+  echo "::endgroup::"
+  exit 1
 fi
 # mirror.ctan.org is a redirector that lands on a RANDOM CTAN mirror; some
 # mirrors intermittently serve broken TLS chains, which aborts curl with a
@@ -38,6 +42,7 @@ TEXLIVE_MIRRORS=(
   "https://mirror.ctan.org/systems/texlive/tlnet"
 )
 TARBALL=""
+TL_REPO=""
 for mirror in "${TEXLIVE_MIRRORS[@]}"; do
   echo "  INFO  trying ${mirror}"
   if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 600 --progress-bar \
@@ -74,8 +79,9 @@ echo "  OK    install-tl found at ${INSTALLER}"
 echo "::endgroup::"
 
 echo "::group::install-texlive — write profile & run install-tl"
+TL_SCHEME="scheme-small"
 cat >"${TEXLIVE_TMP}/texlive.profile" <<EOF
-selected_scheme scheme-small
+selected_scheme ${TL_SCHEME}
 TEXDIR ${TEXLIVE_INSTALL_DIR}
 TEXMFLOCAL ${TEXLIVE_INSTALL_DIR}/texmf-local
 TEXMFSYSVAR ${TEXLIVE_INSTALL_DIR}/texmf-var
@@ -85,7 +91,7 @@ tlpdbopt_autobackup 0
 tlpdbopt_install_docfiles 0
 tlpdbopt_install_srcfiles 0
 EOF
-echo "  OK    texlive.profile written (scheme-small, no docs/src)"
+echo "  OK    texlive.profile written (${TL_SCHEME}, no docs/src)"
 
 echo "--- Running install-tl (this may take several minutes) ---"
 if "${INSTALLER}" \
@@ -102,9 +108,13 @@ echo "::endgroup::"
 echo "::group::install-texlive — tlmgr extras & PATH setup"
 TEXLIVE_BINDIR="$(find "${TEXLIVE_INSTALL_DIR}" -maxdepth 3 -type d -name 'x86_64-linux' | head -n1)"
 if [ -z "${TEXLIVE_BINDIR}" ]; then
-  echo "  WARN  Could not locate x86_64-linux bin dir under ${TEXLIVE_INSTALL_DIR} — PATH setup skipped" >&2
+  # HARD failure: built-apps-verify gates on
+  # /usr/lib/texlive/bin/x86_64-linux/pdflatex and /etc/profile.d/texlive.sh,
+  # so exiting 0 here just moved the failure one stage later where it looked
+  # unrelated to TeX Live.
+  echo "  FAIL  Could not locate x86_64-linux bin dir under ${TEXLIVE_INSTALL_DIR}" >&2
   echo "::endgroup::"
-  exit 0
+  exit 1
 fi
 echo "  OK    TeX Live bin dir: ${TEXLIVE_BINDIR}"
 
@@ -115,7 +125,9 @@ if [ ${#EXTRA_TL_PACKAGES[@]} -gt 0 ]; then
     install "${EXTRA_TL_PACKAGES[@]}"; then
     echo "  OK    extra packages installed: ${EXTRA_TL_PACKAGES[*]}"
   else
-    echo "  WARN  tlmgr extra package install exited non-zero" >&2
+    echo "  FAIL  tlmgr extra package install exited non-zero" >&2
+    echo "::endgroup::"
+    exit 1
   fi
 fi
 
@@ -130,6 +142,6 @@ chmod 644 /etc/profile.d/texlive.sh
 echo "  OK    /etc/profile.d/texlive.sh written"
 
 install_size=$(du -sh "${TEXLIVE_INSTALL_DIR}" | cut -f1)
-echo "  OK    TeX Live (scheme-medium) installed to ${TEXLIVE_INSTALL_DIR} (${install_size})"
+echo "  OK    TeX Live (${TL_SCHEME}) installed to ${TEXLIVE_INSTALL_DIR} (${install_size})"
 echo "--- install-texlive complete ---"
 echo "::endgroup::"

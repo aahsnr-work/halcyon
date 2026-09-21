@@ -10,20 +10,20 @@
 # tooling fails the build at the very next dnf call — loud, immediate.
 # Everything halcyon needs is (re)installed explicitly by later stages.
 #
-# Structure mirrors main's removals.yml:
-#   Step B — remove the packages.json exclude.all list, resolved through
-#            rpm -qa (main's packages.sh pattern; absent names tolerated)
-#   Step C — guarded-removals.sh (candidates + reverse-dep gates + must-be-
-#            gone verification; keeper verification lives in 90-verify.sh
-#            against the FINAL state)
-#   Step D — file-footprint.sh (bazzite/waydroid file residue)
-#   Step E — gnome-extensions.sh (extension dirs + gschema overrides)
-#   Step F — fonts-cleanup.sh (unprotected, unreferenced font RPMs)
+# HISTORY: this stage used to call four helper scripts inherited from the
+# Bazzite-fork era (guarded-removals, file-footprint, gnome-extensions,
+# fonts-cleanup). On a bare fedora-bootc base every one of their targets is
+# absent — no GNOME shell, no Waydroid, no bazzite-bling, no unreferenced
+# font RPMs — so they were ~400 lines of no-op whose header comments
+# described an ordering that no longer held. The two parts that carried real
+# value (the sddm/cage reverse-dependency gate and the must-not-survive
+# hard-fail) are folded in below.
 set -euo pipefail
-# shellcheck source=build_files/packages-lib
+# shellcheck source=../packages-lib
 source /ctx/packages-lib
 packages_validate
-echo "::group::remove-packages — Step B: proven-present removals (packages.json exclude.all)"
+
+echo "::group::remove-packages — proven-present removals (packages.json exclude.all)"
 # main pattern: the removal list lives in packages.json (all.exclude.all) and
 # is resolved through rpm -qa first, so entries absent from the base are
 # tolerated instead of failing the transaction.
@@ -41,13 +41,54 @@ if [ "${#PRESENT[@]}" -gt 0 ]; then
 else
   echo "  INFO  nothing from the removal list is installed (clean base)"
 fi
-# base orphan sweep — smallest graph the build will ever see
+echo "::endgroup::"
+
+echo "::group::remove-packages — reverse-dep gated removals (sddm, cage)"
+# Display managers the base may pull in transitively. Remove only when
+# nothing installed still requires them — halcyon logs in through greetd.
+GATED=()
+for p in sddm cage; do
+  if ! rpm -q "$p" >/dev/null 2>&1; then
+    echo "  SKIP  ${p} not installed"
+    continue
+  fi
+  reqs="$(dnf5 -q repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
+  if [ -n "${reqs}" ]; then
+    echo "  GATE  keeping ${p} — required by:"
+    # shellcheck disable=SC2001  # indenting multi-line output, not a substitution
+    echo "${reqs}" | sed 's/^/          /'
+  else
+    echo "  GATE  removing ${p} — nothing installed requires it"
+    GATED+=("$p")
+  fi
+done
+if [ "${#GATED[@]}" -gt 0 ]; then
+  dnf5 -y remove --no-autoremove "${GATED[@]}"
+fi
+echo "::endgroup::"
+
+echo "::group::remove-packages — base orphan sweep"
+# smallest graph the build will ever see
 dnf5 -y autoremove || true
 echo "::endgroup::"
 
-echo "::group::remove-packages — Step C/D/E/F: guarded removals + footprint (existing scripts)"
-/ctx/base/guarded-removals
-/ctx/base/file-footprint
-/ctx/base/gnome-extensions
-/ctx/base/fonts-cleanup
+echo "::group::remove-packages — hard-fail verification (must-be-gone)"
+# These must NOT survive into the image under any circumstance. Unlike the
+# tolerant list above this is a gate: a survivor means the removal
+# transaction silently declined and a later stage would ship it.
+rc=0
+for p in gnome-shell gdm mutter nautilus firefox waydroid inputplumber; do
+  if rpm -q "$p" >/dev/null 2>&1; then
+    ver=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p" 2>/dev/null || echo "?")
+    echo "  FAIL  ${p}-${ver} still installed after removals" >&2
+    rc=1
+  else
+    echo "  PASS  ${p} — absent (correct)"
+  fi
+done
 echo "::endgroup::"
+
+# NOTE: keeper verification (steam/gamescope/scx/umu/bazaar/lutris/…) lives
+# in final-verify — it must gate the FINAL state, and this stage runs before
+# anything is installed.
+exit "${rc}"

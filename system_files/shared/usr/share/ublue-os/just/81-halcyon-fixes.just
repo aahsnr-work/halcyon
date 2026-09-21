@@ -216,7 +216,7 @@ toggle-i915-sleep-fix ACTION="":
     get_current_status() {
       local karg_status
       local kargs
-      # bootc: no rpm-ostree — the current cmdline is the source of truth
+      # bootc: the current cmdline is the source of truth
       kargs=$(cat /proc/cmdline)
       karg_status=$(grep -o 'i915.enable_dc=[-0-9]' <<< "$kargs" | tail -n1 | cut -d= -f2)
       if [[ -z "$karg_status" ]]; then

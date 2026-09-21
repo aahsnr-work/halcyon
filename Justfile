@@ -28,7 +28,8 @@ check:
         bash -n "$file" || status=1
     done < <(find build_files -type f \
                ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
-               ! -name "*.json" ! -name "README*")
+               ! -path "*desktop/greetd*" \
+               ! -name "*.json" ! -name "*.toml" ! -name "README*")
     echo "::endgroup::"
 
     echo "::group::bash -n — verify/ helpers + workflow shell code"
@@ -37,6 +38,17 @@ check:
         echo "Checking syntax: $file"
         bash -n "$file" || status=1
     done
+    echo "::endgroup::"
+
+    echo "::group::py_compile — python helpers"
+    # The build-time smoke test is `-h`/`--version`, which never reaches the
+    # code paths that do real work. A missing `datetime` import shipped in the
+    # image once for exactly that reason; compiling every module catches that
+    # class of bug in seconds. Run `just test-python` for the real suites.
+    while read -r file; do
+        echo "Compiling: $file"
+        python3 -m py_compile "$file" || status=1
+    done < <(find build_files/python-packages -name "*.py" ! -path "*/.venv/*")
     echo "::endgroup::"
 
     echo "::group::recipe bodies — parse + bash -n (ujust runtime syntax)"
@@ -81,9 +93,12 @@ lint:
     # while-read + explicit status accumulation: `find -exec` would report
     # only the LAST invocation's exit code and silently mask earlier failures
     while read -r file; do
-        # -x follows `# shellcheck source=` directives (packages-lib gets
-        # linted transitively instead of producing SC1091 noise)
-        if shellcheck --shell=bash -x "$file"; then
+        # -x follows `# shellcheck source=` directives. Those directives are
+        # written relative to the SCRIPT's directory (../packages-lib); on
+        # shellcheck 0.11 the literal SCRIPTDIR source-path is what makes that
+        # resolution work from the repo root (a plain -x or a fixed
+        # source-path dir both fail the ../ form — verified 2026-09-20).
+        if shellcheck --shell=bash -x --source-path=SCRIPTDIR "$file"; then
             echo "shellcheck OK: $file"
         else
             echo "shellcheck FAILED: $file"
@@ -91,8 +106,31 @@ lint:
         fi
     done < <(find build_files -type f \
         ! -path "*libdnf5.conf.d*" ! -path "*python-packages*" \
-        ! -name "*.json" ! -name "README*")
+        ! -path "*desktop/greetd*" \
+        ! -name "*.json" ! -name "*.toml" ! -name "README*")
     exit "$status"
+
+# Run the python helper test suites (not reached by check/lint)
+[group('Just')]
+test-python:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd build_files/python-packages
+    python3 -m venv .venv
+    .venv/bin/pip install --quiet --upgrade pip
+    for pkg in dump-to-markdown rmi; do
+        echo "::group::pytest — ${pkg}"
+        .venv/bin/pip install --quiet -e "./${pkg}[dev]"
+        .venv/bin/pytest "${pkg}"
+        echo "::endgroup::"
+    done
+
+# Audit the .github tree (host-side; no image required)
+[group('Just')]
+check-github:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash verify/verify-github.sh
 
 # Build the container image with the CI label scheme
 [group('Build')]
@@ -115,7 +153,8 @@ build $target_image=image_name $tag=default_tag:
     fi
     LABELS+=("--label" "io.artifacthub.package.deprecated=false")
     LABELS+=("--label" "io.artifacthub.package.keywords={{ image_keywords }}")
-    LABELS+=("--label" "io.artifacthub.package.license=MIT")
+    # Must match LICENSE and the Containerfile's org.opencontainers.image.licenses
+    LABELS+=("--label" "io.artifacthub.package.license=Apache-2.0")
     LABELS+=("--label" "io.artifacthub.package.logo-url={{ image_logo_url }}")
     LABELS+=("--label" "io.artifacthub.package.prerelease=false")
     LABELS+=("--label" "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)")
@@ -126,6 +165,21 @@ build $target_image=image_name $tag=default_tag:
     podman build "${BUILD_ARGS[@]}" "${LABELS[@]}" \
         --pull=newer --platform linux/amd64 \
         --tag "${target_image}:${tag}" --file Containerfile .
+
+# Run the image-side verification suite against a built image
+[group('Build')]
+verify-image $target_image=image_name $tag=default_tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=0
+    for checker in verify-brew.sh verify-chezmoi.sh verify-ujust.sh; do
+        echo "::group::image-side — ${checker}"
+        podman run --rm --entrypoint /bin/bash \
+            -v "$PWD/verify:/verify:ro" \
+            "${target_image}:${tag}" "/verify/${checker}" || status=1
+        echo "::endgroup::"
+    done
+    exit "$status"
 
 # Generate the full alias-tag set (template scheme)
 # Image Name (template recipe — CI resolves the image name through it)

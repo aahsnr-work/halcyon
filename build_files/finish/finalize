@@ -3,10 +3,9 @@
 #
 # Mirrors bazzite's finalize: every consuming stage already disabled its
 # third-party repos — this is the belt-and-braces sweep plus the end-of-build
-# hygiene (keepcache=0, skip_if_unavailable, /var/tmp recreation, /tmp + log
-# + /boot wipes for the bootc lints). The shipped image carries NO third-party
-# repo files — updates arrive via image rebuilds (bootc); any repo can be
-# re-enabled at runtime if needed.
+# hygiene (keepcache=0, skip_if_unavailable, /tmp + log + /boot wipes for the
+# bootc lints). The shipped image carries NO third-party repo files — updates
+# arrive via image rebuilds (bootc); any repo can be re-enabled at runtime.
 set -euo pipefail
 echo "::group::finalize — third-party repo sweep"
 rm -f /etc/yum.repos.d/_copr*:*.repo /etc/yum.repos.d/_copr*.repo \
@@ -29,7 +28,15 @@ rm -f /var/log/dnf5.log /var/log/dnf5.log.* || true
 # no dotted-glob edge cases, and shellcheck-clean
 find /boot -mindepth 1 -delete 2>/dev/null || true
 rm -rf /var/cache/libdnf5/* || true
-rm -rf /var/tmp/* || true
-install -d -m1777 /var/tmp
-echo "  INFO  keepcache=0, skip_if_unavailable=1, /tmp + logs + /boot + caches cleared"
+# /var must be EMPTY in the layer. The previous version ended with
+# `install -d -m1777 /var/tmp`, which put a directory back under /var with no
+# matching tmpfiles.d entry — the var-tmpfiles lint. It only ever passed
+# because the Containerfile runs `bootc container lint` without
+# --fatal-warnings. The base's tmp.conf carries `q /var/tmp 1777 root root -`,
+# so systemd-tmpfiles recreates it at boot with the right mode anyway.
+rm -rf /var/tmp || true
+rm -rf /var/cache/dnf || true
+echo "  INFO  keepcache=0, skip_if_unavailable=1, /tmp + logs + /boot + caches + /var/tmp cleared"
+echo "  INFO  remaining /var content (must be empty or tmpfiles-owned):"
+find /var -mindepth 1 -maxdepth 2 2>/dev/null | sed 's/^/        /' || true
 echo "::endgroup::"

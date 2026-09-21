@@ -27,5 +27,32 @@ gate "just supports --choose"            sh -c 'just --help 2>&1 | grep -q -- --
 # shellcheck disable=SC2016
 gate "ujust list output non-empty"       sh -c '[ -n "$(ujust --list 2>/dev/null)" ]'
 echo "::endgroup::"
+
+echo "::group::ujust-verify — runtime binaries the recipes shell out to"
+# ujust.sh defines Choose/ugum as WRAPPERS around the `gum` binary — the
+# function shipping in ublue-os-just is not the same thing as gum being
+# installed. Without these every interactive prompt in the image is a no-op
+# or an error, which is not detectable from `ujust --list`.
+gate "gum (Choose / ugum backend)"       command -v gum
+gate "grubby (kernel-arg recipes)"       command -v grubby
+gate "ethtool (wol recipe)"              command -v ethtool
+gate "wget (audio HRTF download)"        command -v wget
+gate "hostname (ssh recipe)"             command -v hostname
+gate "fpaste (get-logs recipe)"          command -v fpaste
+gate "wl-copy (get-logs recipe)"         command -v wl-copy
+gate "zenity (steam wrappers)"           command -v zenity
+gate "jq (image-info consumers)"         command -v jq
+echo "::endgroup::"
+
+echo "::group::ujust-verify — no rpm-ostree in halcyon's recipes (this is bootc)"
+# Scope: ONLY the modules this repo ships (8*.just + halcyon-*.just). The
+# ublue-os-just RPM legitimately ships its own modules (00-/10-/20-/40-*.just)
+# carrying rpm-ostree guards for ostree-based hosts — gating those would fail
+# on upstream content we do not control (verified against the RPM payload,
+# 2026-09-20).
+# shellcheck disable=SC2016
+gate "halcyon recipes are rpm-ostree free" sh -c '! grep -l "rpm-ostree" /usr/share/ublue-os/just/8*.just /usr/share/ublue-os/just/halcyon-*.just 2>/dev/null | grep -q .'
+echo "::endgroup::"
+
 [ "$fail" = 0 ] || { echo "::error::ujust-verify failed"; exit 1; }
 echo "--- ujust-verify: all checks passed ---"

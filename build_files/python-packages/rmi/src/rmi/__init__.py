@@ -13,11 +13,13 @@ import os
 import re
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
+from urllib.parse import quote
 
 SCRIPT_NAME: str = Path(sys.argv[0]).name or "rmi"
-VERSION: str = "2.0.0"
+VERSION: str = "2.0.1"
 
 _XDG_DATA_HOME = os.environ.get("XDG_DATA_HOME") or str(
     Path.home() / ".local" / "share"
@@ -93,7 +95,7 @@ def print_message(color: str, message: str) -> None:
 
 
 def print_error(message: str) -> None:
-    """Print a colored error message to stderr."""
+    """Print a colored message to stderr."""
     print(f"{COLOR_RED}{message}{COLOR_RESET}", file=sys.stderr)
 
 
@@ -114,9 +116,42 @@ def next_backup_path(destination: Path) -> Path:
     return destination.parent / f"{destination.name}.~{highest + 1}~"
 
 
+def write_trashinfo(original: Path, destination: Path) -> None:
+    """Write the XDG .trashinfo companion so desktop trash managers can restore.
+
+    The move has already succeeded by the time this runs; a failure here only
+    costs restore-tooling support, never the user's data, so every error is
+    reported and swallowed.
+    """
+    try:
+        TRASH_INFO_DIR.mkdir(parents=True, exist_ok=True)
+        info_path = TRASH_INFO_DIR / f"{destination.name}.trashinfo"
+        suffix = 0
+        while info_path.exists():
+            suffix += 1
+            info_path = TRASH_INFO_DIR / f"{destination.name}.~{suffix}~.trashinfo"
+        escaped = quote(str(original), safe="/")
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        info_path.write_text(
+            "[Trash Info]\n" f"Path={escaped}\n" f"DeletionDate={stamp}\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        print_error(
+            f"Warning: could not write .trashinfo for '{destination.name}': {exc}"
+        )
+
+
 def move_to_trash(item: Path, verbose: bool) -> bool:
     """Move a single item into the trash, backing up any existing entry."""
     destination = TRASH_DIR / item.name
+
+    # Resolve BEFORE the move: afterwards the original path no longer exists
+    # and the .trashinfo Path= field would record the wrong location.
+    try:
+        original = item.resolve()
+    except OSError:
+        original = item.absolute()
 
     try:
         if destination.exists() or destination.is_symlink():
@@ -129,28 +164,7 @@ def move_to_trash(item: Path, verbose: bool) -> bool:
         print_error(f"Error: Failed to move '{item}': {exc}")
         return False
 
-    # XDG trash spec: write the matching .trashinfo so desktop trash
-    # managers can restore the item (Path is percent-encoded per spec).
-    try:
-        from urllib.parse import quote
-
-        TRASH_INFO_DIR.mkdir(parents=True, exist_ok=True)
-        info_path = TRASH_INFO_DIR / f"{destination.name}.trashinfo"
-        suffix = 0
-        while info_path.exists():
-            suffix += 1
-            info_path = TRASH_INFO_DIR / f"{destination.name}.~{suffix}~.trashinfo"
-        escaped = quote(str(item.resolve()), safe="/")
-        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        info_path.write_text(
-            "[Trash Info]\n"
-            f"Path={escaped}\n"
-            f"DeletionDate={stamp}\n",
-            encoding="utf-8",
-        )
-    except OSError as exc:
-        # the move succeeded; a missing trashinfo only breaks restore-tooling
-        print_error(f"Warning: could not write .trashinfo for '{destination.name}': {exc}")
+    write_trashinfo(original, destination)
 
     if verbose:
         print(f"moved '{item}' -> '{destination}'")

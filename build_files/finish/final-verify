@@ -21,6 +21,9 @@ gate "p03 initramfs"                     test -f "/usr/lib/modules/${KVER}/initr
 gate "nvidia modules for p03"            sh -c "find /usr/lib/modules/${KVER} -name 'nvidia.ko*' | grep -q ."
 gate "p03 keeps SELinux config"          grep -q '^CONFIG_SECURITY_SELINUX=y' "/usr/lib/modules/${KVER}/config"
 gate "nvidia SELinux policy linked"      sh -c 'semodule -lfull 2>/dev/null | grep -q nvidia-driver'
+# NV_MOD_VER must be non-empty: `test "" = ""` would otherwise PASS when
+# modinfo failed, turning the single most important NVIDIA gate into a no-op.
+gate "nvidia module version readable"    test -n "${NV_MOD_VER}"
 gate "nvidia userland matches modules"   test "${NV_MOD_VER}" = "$(rpm -q --qf '%{VERSION}' nvidia-driver-libs.x86_64)"
 gate "nvidia-smi present"                test -x /usr/bin/nvidia-smi
 gate "32-bit nvidia + mesa libs"         rpm -q nvidia-driver-libs.i686 mesa-libGL.i686
@@ -32,11 +35,15 @@ gate "steam installed"                   rpm -q steam
 gate "bazzite-steam wrapper"             test -x /usr/bin/bazzite-steam
 gate "steam desktop -> bazzite-steam"    grep -q 'bazzite-steam' /usr/share/applications/steam.desktop
 gate "devtools (terra + fedora)"         sh -c "rpm -q zed starship yazi zellij golang-github-jesseduffield-lazygit bat eza fzf pandoc-cli chezmoi"
+gate "editors present"                   sh -c 'rpm -q neovim emacs-pgtk'
 echo "::endgroup::"
 
 echo "::group::final-verify — repo end state"
+# finalize DELETES every third-party repo file, so the old
+# "terra repos all disabled" gate matched an empty glob and could never fail.
+# The single gate below is the real property: nothing but Fedora remains.
 gate "only Fedora repo files remain"     sh -c '! ls /etc/yum.repos.d/ | grep -Eqi "copr|vscode|brave|terra|negativo|rpmfusion"'
-gate "terra repos all disabled"          sh -c '! grep -l "^enabled=1" /etc/yum.repos.d/terra*.repo 2>/dev/null | grep -q .'
+gate "repo dir is non-empty (Fedora)"    sh -c 'ls /etc/yum.repos.d/ | grep -q fedora'
 echo "::endgroup::"
 
 echo "::group::final-verify — homebrew + chezmoi end state"
@@ -47,6 +54,26 @@ gate "Brewfile shipped"                  sh -c 'test -f /usr/share/ublue-os/home
 gate "chezmoi installed"                 rpm -q chezmoi
 gate "chezmoi-init wired --global"       test -L /etc/systemd/user/default.target.wants/chezmoi-init.service
 gate "chezmoi-update.timer wired"        test -L /etc/systemd/user/timers.target.wants/chezmoi-update.timer
+echo "::endgroup::"
+
+echo "::group::final-verify — bootc filesystem invariants"
+# These mirror the fatal bootc lints. Catching them here names the offending
+# path; catching them in Stage 17 only names the lint.
+gate "no /usr/etc tree"                  sh -c '! test -e /usr/etc'
+gate "/var/run is a symlink to /run"     sh -c 'test -L /var/run'
+# shellcheck disable=SC2016  # the $( ) must expand inside the inner sh
+gate "/boot is empty"                    sh -c '[ -z "$(ls -A /boot 2>/dev/null)" ]'
+# /opt may carry VENDOR RPM payloads (brave-browser installs /opt/brave.com
+# by design — Bazzite carries an /opt symlink fix for the same reason). RPM
+# semantics make the PARENT directory unowned: implicit parents created while
+# unpacking files carry no %files entry, so rpm -qf /opt/brave.com reports
+# "not owned" even though the package owns everything beneath it
+# (Fedora Packaging:UnownedDirectories). The enforceable property is
+# therefore file-level: every FILE under /opt must belong to an installed
+# RPM — a stray file there means one of this repo's build scripts wrote
+# into /opt.
+# shellcheck disable=SC2016  # "$f" must expand inside the inner sh
+gate "no unowned /opt content"           sh -c '[ ! -d /opt ] && exit 0; find /opt -type f -print0 2>/dev/null | while IFS= read -r -d "" f; do rpm -qf --quiet "$f" >/dev/null 2>&1 || exit 1; done'
 echo "::endgroup::"
 
 # --- package census (distinctively reported in CI; baked into the image) ---

@@ -21,11 +21,20 @@ gate "brew payload present"               test -s "${PAYLOAD}"
 if [ -s "${PAYLOAD}" ]; then
   size=$(du -h "${PAYLOAD}" | cut -f1)
   PAYLIST="$(mktemp)"
-  trap 'rm -f "${PAYLIST}"' EXIT
+  PAYLIST_LONG="$(mktemp)"
+  trap 'rm -f "${PAYLIST}" "${PAYLIST_LONG}"' EXIT
   tar --zstd -tf "${PAYLOAD}" >"${PAYLIST}"
+  tar --zstd -tvf "${PAYLOAD}" >"${PAYLIST_LONG}"
   entries=$(wc -l <"${PAYLIST}")
   echo "  INFO  payload: ${size}, ${entries} entries"
   gate "payload carries brew core"        grep -qF 'home/linuxbrew/.linuxbrew/bin/brew' "${PAYLIST}"
+
+  # brew-update.service and brew-upgrade.service both gate on
+  # ConditionPathIsSymbolicLink=/home/linuxbrew/.linuxbrew/bin/brew. If the
+  # payload ever carries a regular file there, BOTH timers skip forever and
+  # nothing ever reports it. Assert the link survives the pack.
+  gate "bin/brew is a symlink in payload" \
+    grep -qE '^l.*home/linuxbrew/\.linuxbrew/bin/brew ->' "${PAYLIST_LONG}"
 
   echo "--- Checking every Brewfile formula is inside the payload ---"
   # "Inside" means a COMPLETE pour: Cellar/<name>/<version>/INSTALL_RECEIPT.json.
@@ -51,6 +60,22 @@ if [ -s "${PAYLOAD}" ]; then
     fail=1
   fi
 fi
+echo "::endgroup::"
+
+echo "::group::brew-verify — payload carries only what Fedora does not ship"
+# The Brewfile is deliberately trimmed to formulas with no RPM in this image
+# (bun/pixi/opencode). Anything else is poured, shipped and then shadowed on
+# PATH forever, because environment.d APPENDS the brew dirs by design.
+dupes=0
+while IFS= read -r name; do
+  [ -z "${name}" ] && continue
+  case "${name}" in
+    bun|pixi|opencode) continue ;;
+  esac
+  echo "  WARN  ${name} is in the Brewfile but not on the no-RPM allowlist — confirm Fedora/Terra really lacks it"
+  dupes=$((dupes + 1))
+done < <(sed -nE 's/^[[:space:]]*brew "?([^" ]+)"?.*/\1/p' "${BREWFILE}" | sed 's|^.*/||')
+[ "${dupes}" -eq 0 ] && echo "  OK    no RPM-shadowed formulas in the Brewfile"
 echo "::endgroup::"
 
 echo "::group::brew-verify — no /var state in the layer"

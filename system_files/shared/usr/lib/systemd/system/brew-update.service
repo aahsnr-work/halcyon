@@ -2,7 +2,13 @@
 Description=Auto-update Brew binary (formula metadata)
 After=local-fs.target
 After=network-online.target
+# ublue-os/brew gates on bin/brew being a SYMLINK (into Homebrew/bin/brew).
+# halcyon restores the prefix from a tarball via `cp -R -n`, which preserves
+# links — brew-verify asserts the link survives the pack so this condition
+# cannot silently skip forever. Executability is also required: a dangling
+# link would satisfy the symlink test alone.
 ConditionPathIsSymbolicLink=/home/linuxbrew/.linuxbrew/bin/brew
+ConditionPathExists=/home/linuxbrew/.linuxbrew/bin/brew
 
 [Service]
 User=1000
@@ -10,4 +16,6 @@ Type=oneshot
 Environment=HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 Environment=HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew
 Environment=HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
+Environment=HOMEBREW_NO_ANALYTICS=1
+Environment=HOMEBREW_NO_ENV_HINTS=1
 ExecStart=/usr/bin/bash -c "/home/linuxbrew/.linuxbrew/bin/brew update"

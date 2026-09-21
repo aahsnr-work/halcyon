@@ -2,8 +2,10 @@
 # halcyon build step — install-devtools (Fedora brew-formula replacements)
 # Fedora RPMs (MIGRATION §8.7). RPM copies keep PATH priority: the Homebrew
 # payload (build_files/brew, next stage) APPENDS its bin dirs via
-# environment.d + profile.d, so these RPMs win and brew only backfills what
-# Fedora does not ship (bun, pixi, opencode — see the brew/Brewfile).
+# environment.d + profile.d, so these RPMs win. The Brewfile is therefore
+# trimmed to the three formulas Fedora and Terra do not ship at all
+# (bun, pixi, opencode) — anything listed in both places is poured, shipped
+# and then permanently shadowed.
 # chezmoi comes from the official Fedora repo (2.72 in F44) — blue-build
 # chezmoi module parity is provided by the systemd user units, not the
 # install source.
@@ -12,10 +14,7 @@ echo "::group::install-devtools — brew-formula replacements (Fedora RPMs)"
 # NOTE: lazygit/starship/yazi/zellij are NOT in Fedora 44 (verified in the
 # 2026-09-19 CI-equivalent build) — all four come from Terra via install-terra
 # (lazygit ships there under its Go name golang-github-jesseduffield-lazygit).
-# bun/pixi/opencode publish no Fedora RPMs — they arrive via the baked
-# Homebrew payload (build_files/brew/install-brew-bundle + Brewfile), which
-# is exactly how the main branch shipped them (brew.yml, 22 formulas).
-# shellcheck source=build_files/packages-lib
+# shellcheck source=../packages-lib
 source /ctx/packages-lib
 packages_validate
 readarray -t DEV_PKGS < <(packages_for fedora-devtools)

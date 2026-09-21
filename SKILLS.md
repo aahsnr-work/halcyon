@@ -115,25 +115,31 @@ subsystem, a new class of software, a new configuration phase.
 
 ### Steps
 
-1. **Name the script** `build_files/<verb>-<subject>`, extensionless, matching
-   the existing vocabulary: `install-*`, `setup-*`, `configure-*`, `build-*`,
-   `remove-*`. Commit it executable:
+1. **Name the script** `build_files/<folder>/<verb>-<subject>`, extensionless,
+   matching the existing vocabulary: `install-*`, `setup-*`, `configure-*`,
+   `build-*`, `remove-*`. Pick the folder by build phase — `base/ kernel/
+   packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
 
    ```bash
-   git add build_files/install-foo
-   git update-index --chmod=+x build_files/install-foo
+   git add build_files/runtime/install-foo
+   git update-index --chmod=+x build_files/runtime/install-foo
    ```
 
-2. **Skeleton** (copy the shape of `install-nix`, the smallest real example):
+2. **Skeleton** (copy the shape of `runtime/install-nix`, the smallest real
+   example). Note the shellcheck directive is relative to the SCRIPT's
+   directory, not the repo root:
 
    ```bash
    #!/usr/bin/env bash
    # halcyon build step — install-foo (one line on WHY this stage exists)
    set -euo pipefail
+   # shellcheck source=../packages-lib
+   source /ctx/packages-lib
+   packages_validate
    echo "::group::install-foo — <phase>"
+   readarray -t FOO_PKGS < <(packages_for foo)
    dnf5 -y --setopt=install_weak_deps=False install \
-     foo \
-     foo-selinux
+     "${FOO_PKGS[@]}"
    echo "::endgroup::"
    ```
 
@@ -141,25 +147,25 @@ subsystem, a new class of software, a new configuration phase.
    write the stage body — it forces you to state what "success" means. See
    [`add-verify-gate`](#skill-add-verify-gate).
 
-4. **Insert the `RUN` block** in `Containerfile` at the correct position. Use
-   this form verbatim when the stage calls `dnf5`:
+4. **Insert the `RUN` block** in `Containerfile` at the correct position, with
+   a stage banner. Use this form verbatim when the stage calls `dnf5`:
 
    ```dockerfile
    # ---- Stage N: foo ----------------------------------------------------------
    RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
        --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-       /ctx/install-foo && /ctx/install-foo-verify && /ctx/cleanup
+       echo "████ STAGE NN/17 · install-foo · <summary> ████" \
+       && /ctx/runtime/install-foo && /ctx/runtime/install-foo-verify && /ctx/cleanup
    ```
 
-   Drop the `type=cache` mount if the stage never touches `dnf5` — stages 11,
-   12 and 14 do not have it, and adding it there is noise.
+   Drop the `type=cache` mount if the stage never touches `dnf5`.
 
 5. **Renumber the stage comments** below your insertion point. They are
    referenced in commit messages and CI logs; leaving them stale is worse than
    not numbering at all.
 
-6. Run `just check && just lint`. Both walk `build_files` at `-maxdepth 1`, so a
-   top-level script is picked up automatically with no Justfile edit.
+6. Run `just check && just lint`. Both walk `build_files` recursively, so a
+   script in any phase folder is picked up automatically with no Justfile edit.
 
 ### Placement rules (in order of precedence)
 
@@ -185,8 +191,7 @@ subsystem, a new class of software, a new configuration phase.
 - The `ctx` stage is `FROM scratch` and never becomes part of the image. Do not
   try to persist anything there.
 - Use `set -euo pipefail`. Use `set -uo pipefail` **only** when the script
-  deliberately accumulates failures and returns its own `rc` (the pattern in
-  `guarded-removals`, `file-footprint`, `fonts-cleanup`).
+  deliberately accumulates failures and returns its own `rc`.
 
 ---
 
@@ -201,13 +206,15 @@ subsystem, a new class of software, a new configuration phase.
 
 2. Pick the destination by **source repo**, not by what the package does:
 
-   | Source | File | How |
-   | --- | --- | --- |
-   | Fedora (core/desktop/gaming/apps) | `install-packages` | add to the matching commented block |
-   | Fedora (CLI dev tooling) | `install-devtools` | alphabetical in the single list |
-   | Terra | `install-terra` | add to the `TERRA_PKGS` array |
-   | A COPR | the stage that consumes it | `copr enable` → install → `copr disable`, inline |
-   | Vendor repo (MS, Brave) | `install-packages` | write `.repo`, install, `rm` the `.repo`, same script |
+   | Source                           | File                                                | How                                           |
+   | -------------------------------- | --------------------------------------------------- | --------------------------------------------- |
+   | Fedora (core/hardware)           | `packages.json` → `fedora-core` / `fedora-hardware` | alphabetical in the group                     |
+   | Fedora (editors/runtimes)        | `packages.json` → `fedora-editors`                  | alphabetical                                  |
+   | Fedora (CLI dev tooling)         | `packages.json` → `fedora-devtools`                 | alphabetical                                  |
+   | Fedora (ujust recipe dependency) | `packages.json` → `ujust-fedora`                    | and add a `command -v` gate to `ujust-verify` |
+   | Terra                            | `packages.json` → `terra`                           | resolves exclusively from Terra               |
+   | A COPR                           | `packages.json` → that COPR's group                 | the stage owns `copr enable`/`disable`        |
+   | Vendor repo (MS, Brave)          | `packages.json` → `vendor-apps`                     | ONLY if it truly resolves from that repo      |
 
 3. Always `--setopt=install_weak_deps=False`. If the package relied on a weak
    dependency, list that dependency explicitly too — this is why
@@ -303,17 +310,23 @@ echo "--- <stage>-verify: all checks passed ---"
 ### Gate forms that are wrong in this environment
 
 - **`test -e /usr/lib/systemd/system/<target>.wants/<unit>`** — `systemctl
-  enable` inside a build container writes to **`/etc/systemd/system/…`**, not
-  `/usr/lib`. `nix-verify` currently asserts the `/usr/lib` path and therefore
-  gates on something that is never created. Use `systemctl is-enabled <unit>`,
-  which is path-agnostic, or test the `/etc` path.
+  enable` inside a build container writes to **`/etc/systemd/system/…`**.
+  Use `systemctl is-enabled <unit>`, which is path-agnostic.
+- **A gate whose glob a later stage deletes.** `final-verify` carried
+  `! grep -l "^enabled=1" /etc/yum.repos.d/terra*.repo | grep -q .` — but
+  `finalize` deletes those files, so the glob matched nothing and the gate
+  passed unconditionally. Gate the property that survives.
+- **`test "${VAR}" = "$(...)"` where VAR may be empty.** If both sides fail to
+  produce a value, `test "" = ""` PASSES. The NVIDIA userland/module version
+  gate needs a companion `test -n "${NV_MOD_VER}"` in front of it.
 - **Gating a package that was installed with `|| true`.** Either the package is
   required (drop the `|| true`) or it is optional (drop the gate).
-- **`grep -q` against a file another stage may rewrite later.** Gate the final
-  state in `final-verify` instead.
 - **Gating a path inside a directory that may not exist** — `grep -rq pattern
-  /some/dir/` returns non-zero for "directory missing" *and* "pattern absent",
-  which hides which one happened. Add a `test -d` gate alongside it.
+  /some/dir/` returns non-zero for "directory missing" *and* "pattern absent".
+  Add a `test -d` gate alongside it.
+- **Gating a file's existence when an RPM may rewrite its content.** Gate the
+  content (`grep -q` for the line that matters), or install the file from
+  `/ctx` after the RPM lands — see `configure-system`'s greetd handling.
 
 ---
 
@@ -700,18 +713,22 @@ after installs.
    grep -rn '\b<pkg>\b' build_files/
    ```
 
-5. For file-level removal (not RPM-owned), extend `file-footprint` using its
-   existing array + loop + counter style.
+5. For file-level removal of something no RPM owns, write the removal inline in
+   the stage that creates the condition — there is no longer a general-purpose
+   file-footprint script to extend.
 
-### Caveat on the inherited removal machinery
+### The inherited removal machinery is gone
 
 `guarded-removals`, `file-footprint`, `gnome-extensions` and `fonts-cleanup`
-were written when halcyon was layered on Bazzite. On a bare `fedora-bootc` base
-most of their targets do not exist and most of their work is a no-op, and
-several of their header comments describe an ordering that no longer holds
-(`fonts-cleanup` claims it "runs AFTER the packages stage" — it does not; it
-runs first). Treat their comments as historical, verify before trusting, and
-prefer deleting dead branches over extending them.
+were written when halcyon was layered on Bazzite. On a bare `fedora-bootc`
+base every one of their targets is absent, so they were ~400 lines of no-op
+whose header comments described an ordering that no longer held. They have
+been deleted.
+
+The two parts that carried real value now live in `base/remove-packages`:
+the **reverse-dependency gate** (used for `sddm`/`cage`) and the
+**must-not-survive hard-fail loop**. Add to those rather than resurrecting
+the old scripts.
 
 ---
 
@@ -808,11 +825,9 @@ prefer deleting dead branches over extending them.
 
 3. `Containerfile`: `ARG FEDORA_VERSION=45`.
 4. `.github/workflows/build.yml`: every `fedora-44-x86_64` in the `URLS` array.
-5. `Justfile`: the hardcoded `"44"` and `"${DATE}-44"` entries in
-   `generate-build-tags`. Also fix `IMAGE_VERSION`, which currently shells out
-   to `rpm -E %fedora` **on the GitHub Actions runner** — not a Fedora host — and
-   therefore produces a literal `%fedora.<date>`. Derive it from
-   `FEDORA_VERSION` instead.
+5. `Justfile`: nothing to change — `fedora_version` comes from `halcyon.env`
+   and flows into both `generate-build-tags` and the `IMAGE_VERSION` build
+   arg. Change `FEDORA_VERSION` in `halcyon.env`.
 6. `install-terra` picks up `terra${FEDORA_MAJOR}` from `rpm -E %fedora` inside
    the build and needs no edit.
 7. Re-run [`verify-package-availability`](#skill-verify-package-availability)
@@ -933,8 +948,8 @@ skill directory.
 ## Where this file lives
 
 - **`/SKILLS.md`** — repository root, beside `AGENTS.md` and `README.md`.
-- Add a pointer from `AGENTS.md` §1 so a session that loads `AGENTS.md`
-  discovers it: *"Task-level procedures live in `SKILLS.md`."*
+- The pointer from `AGENTS.md` §1 is in place: *"Task-level procedures live in
+  `SKILLS.md`."* `.containerignore` excludes this file from the build context.
 - Add `AGENTS.md` and `SKILLS.md` to `.containerignore`. It already excludes
   `README.md`, `MIGRATION.md` and `TODO.md`; without these two entries they are
   uploaded into every build context for no reason.

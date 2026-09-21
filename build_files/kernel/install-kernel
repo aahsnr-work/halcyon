@@ -56,11 +56,18 @@ dnf5 -y copr disable catpieleaf/kernel-p03
 
 # --- NVIDIA userland from negativo17 (clean leaf packages only — see header).
 # 32-bit libs for Steam/Proton, CUDA libs for NVENC/DLSS, VA-API bridge.
+# NOTE (dnf5 multilib collapse, reproduced 2026-09-20): with the cuda-libs
+# pair in the same transaction, dnf5 resolves the bare `nvidia-driver-libs`
+# name onto the i686 package and silently DROPS nvidia-driver-libs.x86_64
+# from the plan — the image would ship without its 64-bit GL/EGL/Vulkan
+# stack. Spelling out both arches keeps the solver honest; the bare+`.i686`
+# form only collapses when `nvidia-driver-cuda-libs` is in the transaction
+# (verified: both forms reproduce in isolation, the pair collapses together).
 dnf5 -y --setopt=tsflags=noscripts --setopt=install_weak_deps=False install \
   libva-nvidia-driver \
-  nvidia-driver-cuda-libs \
+  nvidia-driver-cuda-libs.x86_64 \
   nvidia-driver-cuda-libs.i686 \
-  nvidia-driver-libs \
+  nvidia-driver-libs.x86_64 \
   nvidia-driver-libs.i686 \
   nvidia-libXNVCtrl \
   nvidia-modprobe \
@@ -115,5 +122,6 @@ depmod "${KVER}"
 # later stage can silently pull from it (finalize removes the file entirely)
 sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/fedora-nvidia.repo 2>/dev/null || true
 
-echo "  INFO  nvidia userland: $(rpm -q --qf '%{VERSION}' nvidia-driver-libs) (modules: $(rpm -q --qf '%{VERSION}' kernel-p03-nvidia-open))"
+NV_MOD_VER="$(modinfo -F version "$(find "/usr/lib/modules/${KVER}" -name 'nvidia.ko*' | head -1)")"
+echo "  INFO  nvidia userland: $(rpm -q --qf '%{VERSION}' nvidia-driver-libs.x86_64) (module: ${NV_MOD_VER})"
 echo "::endgroup::"

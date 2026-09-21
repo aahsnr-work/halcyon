@@ -1,24 +1,26 @@
 {
   "_docs": {
     "purpose": "Single source of truth for every dnf-managed package in the image (ublue-os/main packages.json style, adapted to halcyon's per-use repo policy).",
-    "how-to-add": "Add the package name to the group whose repo window it resolves in — the stage that consumes that group handles repo enable/disable and flags. Groups map 1:1 to build stage scripts (see build_files/packages-lib).",
+    "how-to-add": "Add the package name to the group whose REPO WINDOW it resolves in — not the group whose subject matter it fits. The stage that consumes that group handles repo enable/disable and flags. Groups map 1:1 to build stage scripts (see build_files/packages-lib).",
     "groups": {
       "fedora-core": "Desktop/base packages from Fedora repos (install-packages). The @custom-environment comps group stays hardcoded in install-packages (comps groups are not catalog entries).",
       "fedora-hardware": "Firmware/microcode/audio/32-bit-GL support (install-packages).",
+      "fedora-editors": "Editors and language runtimes from Fedora (install-packages). Split out of vendor-apps, which they were never resolved from — they only worked because they happened to install inside the vscode/brave repo window. NOTE: the F44 names are nodejs24/nodejs24-npm (verified 2026-09-20 — plain nodejs/npm do not resolve on Fedora 44).",
       "hyprland-copr": "Resolved from COPR lionheartp/Hyprland (install-packages). Weak deps are OFF — list every stack weak dep explicitly.",
       "gaming": "RPM Fusion + Fedora gaming packages (install-packages).",
       "bazaar-copr": "Resolved from COPR ublue-os/packages (install-packages).",
       "zen-copr": "Resolved from COPR sneexy/zen-browser (install-packages).",
-      "vendor-apps": "Resolved from the per-use vendor repos written inside install-packages (vscode, brave).",
+      "vendor-apps": "Resolved from the per-use vendor repos written inside install-packages (vscode, brave) — NOTHING ELSE belongs here.",
       "vendor-apps-optional": "Installed with skip-unavailable semantics (may be absent from the vendor repo).",
       "fedora-devtools": "Former brew formulas available in Fedora (install-devtools).",
       "nix": "Winter-pattern nix packages (install-nix).",
       "flatpak": "The flatpak stack itself (setup-flatpaks); libnotify covers notify-send.",
       "ujust-copr": "ublue-os-just machinery + uupd from COPR ublue-os/packages (setup-ujust).",
-      "ujust-fedora": "Fedora companions of the ujust tooling (setup-ujust).",
+      "ujust-fedora": "Fedora companions of the ujust tooling (setup-ujust). gum backs Choose/ugum in ujust.sh; grubby + grub2-tools back every kernel-arg and GRUB recipe; ethtool backs wol. The wget BINARY on F44 comes from wget2-wget (verified 2026-09-20 — no package named just wget exists).",
       "terra": "Resolved EXCLUSIVELY from Terra repos (install-terra uses --disablerepo='*'). terra-release/-mesa/-multimedia are repo bootstrap and stay hardcoded there.",
       "exclude-all": "The 'exclude' block drives remove-packages (Stage 2); entries are resolved through rpm -qa first, so absent names are tolerated."
-    }
+    },
+    "build-tool-dependencies": "zstd, util-linux-core (setpriv), gcc-c++, git, curl and jq are hard preconditions of install-brew-bundle; gnupg2 is a hard precondition of install-texlive's signature verification. They are listed in fedora-core deliberately — do not remove them as 'unused'."
   },
   "all": {
     "include": {
@@ -36,6 +38,7 @@
         "curl",
         "ddcutil",
         "distrobox",
+        "ethtool",
         "fail2ban",
         "fastfetch",
         "file-roller",
@@ -44,11 +47,13 @@
         "fonts-filesystem",
         "gcc-c++",
         "git",
+        "gnupg2",
         "go",
         "grim",
         "gsettings-desktop-schemas",
         "gtk4-layer-shell",
         "gzip",
+        "hostname",
         "hunspell",
         "hunspell-en",
         "hunspell-en-GB",
@@ -86,15 +91,17 @@
         "transmission-gtk",
         "udica",
         "udiskie",
+        "util-linux-core",
+        "wget2-wget",
         "xdg-desktop-portal",
         "xdg-user-dirs",
         "xdg-user-dirs-gtk",
-        "xorg-x11-server-Xorg",
         "xorg-x11-server-Xwayland",
         "xorg-x11-xauth",
         "zathura",
         "zathura-pdf-poppler",
         "zathura-plugins-all",
+        "zstd",
         "zsh"
       ],
       "fedora-hardware": [
@@ -127,6 +134,13 @@
         "mesa-vulkan-drivers.i686",
         "mesa-libEGL.i686",
         "mesa-libGL.i686"
+      ],
+      "fedora-editors": [
+        "emacs-pgtk",
+        "neovim",
+        "nodejs24",
+        "nodejs24-npm",
+        "tree-sitter-cli"
       ],
       "hyprland-copr": [
         "cliphist",
@@ -168,24 +182,10 @@
         "ydotool",
         "zenity"
       ],
-      "bazaar-copr": [
-        "bazaar"
-      ],
-      "zen-copr": [
-        "zen-browser"
-      ],
-      "vendor-apps": [
-        "code",
-        "brave-browser",
-        "emacs-pgtk",
-        "neovim",
-        "nodejs24",
-        "nodejs24-npm",
-        "tree-sitter-cli"
-      ],
-      "vendor-apps-optional": [
-        "brave-origin"
-      ],
+      "bazaar-copr": ["bazaar"],
+      "zen-copr": ["zen-browser"],
+      "vendor-apps": ["code", "brave-browser"],
+      "vendor-apps-optional": ["brave-origin"],
       "fedora-devtools": [
         "atuin",
         "bat",
@@ -209,24 +209,10 @@
         "tealdeer",
         "uv"
       ],
-      "nix": [
-        "nix",
-        "nix-daemon"
-      ],
-      "flatpak": [
-        "flatpak",
-        "flatpak-selinux",
-        "libnotify"
-      ],
-      "ujust-copr": [
-        "uupd",
-        "ublue-os-just",
-        "ublue-os-update-services"
-      ],
-      "ujust-fedora": [
-        "glow",
-        "stress-ng"
-      ],
+      "nix": ["nix", "nix-daemon"],
+      "flatpak": ["flatpak", "flatpak-selinux", "libnotify"],
+      "ujust-copr": ["uupd", "ublue-os-just", "ublue-os-update-services"],
+      "ujust-fedora": ["glow", "grub2-tools", "grubby", "gum", "stress-ng"],
       "terra": [
         "zed",
         "scx-scheds",
@@ -268,7 +254,6 @@
         "steamdeck-backgrounds",
         "steamdeck-gnome-presets",
         "waydroid",
-        "fastfetch",
         "firefox",
         "firefox-langpacks",
         "gnome-shell",

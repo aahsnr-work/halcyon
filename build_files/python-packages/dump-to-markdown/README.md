@@ -12,16 +12,17 @@ is included. Stdlib-only: no third-party runtime dependencies.
 
 ## Install
 
-Halcyon bakes this into the built image (`/usr/bin/dump-to-markdown`) at
-build time via `build_files/install-dump-to-markdown.sh`. For use on a
-dev machine, install it from this repo:
+halcyon bakes this into the built image (`/usr/bin/dump-to-markdown`) at
+build time via `build_files/apps/install-python-packages`, which installs
+every helper into the shared venv at `/usr/lib/halcyon-python`. For use on a
+dev machine, install it from this directory:
 
 ```sh
-uv tool install ./files/dump-to-markdown
+uv tool install ./build_files/python-packages/dump-to-markdown
 # or
-pipx install ./files/dump-to-markdown
+pipx install ./build_files/python-packages/dump-to-markdown
 # or
-python3 -m pip install --user ./files/dump-to-markdown
+python3 -m pip install --user ./build_files/python-packages/dump-to-markdown
 ```
 
 ## Usage
@@ -38,15 +39,15 @@ python3 -m dump_to_markdown   # module form
 
 ## Options
 
-| Option | Description |
-| --- | --- |
-| `--root PATH` | Root directory to scan (default: current directory) |
-| `--output, -o PATH` | Markdown file to write (default: `./project_dump.md`) |
-| `--exclude-dir DIRNAME` | Extra excluded dir name (repeatable; `.git` always excluded) |
-| `--max-size BYTES` | Skip embedding files larger than this many bytes |
-| `--follow-symlinks` | Descend into symlinked dirs (a symlink cycle hangs, like `find -L`) |
-| `-v, --verbose` | Debug-level logging |
-| `--version` | Print version and exit |
+| Option                  | Description                                                         |
+| ----------------------- | ------------------------------------------------------------------- |
+| `--root PATH`           | Root directory to scan (default: current directory)                 |
+| `--output, -o PATH`     | Markdown file to write (default: `./project_dump.md`)               |
+| `--exclude-dir DIRNAME` | Extra excluded dir name (repeatable; `.git` always excluded)        |
+| `--max-size BYTES`      | Skip embedding files larger than this many bytes                    |
+| `--follow-symlinks`     | Descend into symlinked dirs (a symlink cycle hangs, like `find -L`) |
+| `-v, --verbose`         | Debug-level logging                                                 |
+| `--version`             | Print version and exit                                              |
 
 Exit codes: `0` success · `1` bad root or write failure · `130` interrupted.
 
@@ -56,5 +57,7 @@ Exit codes: `0` success · `1` bad root or write failure · `130` interrupted.
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest
 ```
+
+Or from the repo root: `just test-python`.
 
 Apache-2.0 — see the repo root `LICENSE`.

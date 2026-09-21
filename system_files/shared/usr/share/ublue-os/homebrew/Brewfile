@@ -1,22 +1,16 @@
-brew "atuin"
-brew "bat"
-brew "btop"
+# halcyon Brewfile — ONLY formulas Fedora and Terra do not ship.
+#
+# Everything else (bat, btop, cava, chafa, direnv, dust, eza, fd, fzf,
+# gnuplot, lazygit, pandoc, ripgrep, starship, tealdeer, uv, yazi, zellij,
+# atuin) is installed as an RPM by install-devtools / install-terra. The
+# environment.d wiring APPENDS the brew bin dirs so RPMs keep PATH priority
+# — a brewed duplicate can therefore never be the binary that runs. Pouring
+# it anyway costs build time (22 pours × up to 3 retries) and payload size
+# (~87k files extracted at every boot by halcyon-brew-bundle.service) for a
+# binary nobody can reach.
+#
+# Before adding a formula here, run the verify-package-availability skill:
+# if an RPM exists in Fedora or Terra, it belongs in packages.json instead.
 brew "bun"
-brew "cava"
-brew "chafa"
-brew "direnv"
-brew "dust"
-brew "eza"
-brew "fd"
-brew "fzf"
-brew "gnuplot"
-brew "lazygit"
-brew "pandoc"
 brew "pixi"
-brew "ripgrep"
-brew "starship"
-brew "tealdeer"
-brew "uv"
-brew "yazi"
-brew "zellij"
 brew "opencode"

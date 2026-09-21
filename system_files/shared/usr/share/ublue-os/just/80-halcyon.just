@@ -8,9 +8,9 @@
 # configure-snapshots (snapper), bazzite-cli,
 # _toggle-steamdeck-alias (deck), _install-system-flatpaks,
 # _disable-ntfs-service (bazzite-only).
-# Adapted for bootc: rpm-ostree kargs -> grubby (bootc has no rpm-ostree),
-# "rpm-ostree kargs" reads -> /proc/cmdline, ugum choose -> Choose,
-# get-logs -> bootc status with rpm-ostree fallback.
+# Adapted for bootc: kernel args -> grubby (reads /proc/cmdline),
+# ugum choose -> Choose,
+# get-logs -> bootc status.
 
 alias toggle-ssh := ssh
 
@@ -480,7 +480,7 @@ toggle-save-panics ACTION="":
         echo "options ramoops mem_name=ramoops mem_size=0x10000 record_size=0x4000" | \
           sudo tee /etc/modprobe.d/ramoops.conf > /dev/null
         echo "ramoops" | sudo tee /etc/modules-load.d/ramoops.conf > /dev/null
-        # bootc: no rpm-ostree — grubby edits the kernel args in place
+        # bootc: grubby edits the kernel args in place
         for _ka in "reserve_mem=64K:4096:ramoops" "pstore.backend=ramoops"; do
           [[ "$(cat /proc/cmdline)" == *"$_ka"* ]] || sudo grubby --update-kernel=ALL --args="$_ka"
         done
@@ -605,7 +605,7 @@ configure-watchdog ACTION="":
       elif [[ "$CPU_MODEL" =~ "AMD" ]]; then
         WATCHDOG_KARGS="$WATCHDOG_KARGS --delete-if-present=modprobe.blacklist=sp5100_tco"
       fi
-      # bootc: translate rpm-ostree kargs flags to grubby
+      # bootc: translate the legacy kargs flags to grubby
       for _ka in $WATCHDOG_KARGS; do
         case "$_ka" in
           --append-if-missing=*) sudo grubby --update-kernel=ALL --args="${_ka#--append-if-missing=}" ;;
@@ -622,7 +622,7 @@ configure-watchdog ACTION="":
       elif [[ "$CPU_MODEL" =~ "AMD" ]]; then
         WATCHDOG_KARGS="$WATCHDOG_KARGS --append-if-missing=modprobe.blacklist=sp5100_tco"
       fi
-      # bootc: translate rpm-ostree kargs flags to grubby
+      # bootc: translate the legacy kargs flags to grubby
       for _ka in $WATCHDOG_KARGS; do
         case "$_ka" in
           --append-if-missing=*) sudo grubby --update-kernel=ALL --args="${_ka#--append-if-missing=}" ;;
@@ -730,15 +730,9 @@ get-logs:
     echo " "
     # Upload system status information
     system_information=$({
-      if command -v bootc >/dev/null 2>&1; then
-        echo "bootc status"
-        echo "------------"
-        bootc status
-      else
-        echo "rpm-ostree status"
-        echo "-----------------"
-        rpm-ostree status
-      fi
+      echo "bootc status"
+      echo "------------"
+      bootc status
       echo
       echo "fastfetch"
       echo "---------"

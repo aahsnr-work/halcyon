@@ -1,8 +1,8 @@
 ---
 name: lint
-# PR gate modeled on bazzite's just-syntax-check.yml, widened to also run
-# shellcheck over build_files (the same two gates the build workflow runs
-# before podman, so PRs fail here in seconds instead of 40 minutes in).
+# PR gate modeled on bazzite's just-syntax-check.yml, widened to run every
+# host-side gate the build workflow runs before podman, so PRs fail here in
+# seconds instead of 40 minutes in.
 on:
   pull_request:
   push:
@@ -39,3 +39,54 @@ jobs:
           source .github/log-helpers.sh
           banner "just lint"
           just lint && ok "just lint passed"
+
+  github-audit:
+    name: .github audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+
+      # verify-github.sh checks required files, YAML parseability, cron
+      # syntax, action pins and the log helpers. It was written and then
+      # never run by anything — it is host-side and takes seconds.
+      - name: Audit .github tree
+        run: |
+          source .github/log-helpers.sh
+          banner "verify-github"
+          bash verify/verify-github.sh
+
+  python:
+    name: Python helpers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # `just check` compiles every module (catches missing imports that the
+      # `-h` smoke test never reaches); this job runs the real suites.
+      - name: Compile + test python helpers
+        run: |
+          source .github/log-helpers.sh
+          banner "python helpers"
+          cd build_files/python-packages
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet --upgrade pip
+          status=0
+          for pkg in dump-to-markdown rmi; do
+            echo "::group::pytest — ${pkg}"
+            .venv/bin/pip install --quiet -e "./${pkg}[dev]"
+            .venv/bin/pytest "${pkg}" || status=1
+            echo "::endgroup::"
+          done
+          exit "$status"

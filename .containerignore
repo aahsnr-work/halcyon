@@ -5,11 +5,15 @@
 .vscode
 .idea
 .zcode
+.zcodeignore
 .bluebuild-scripts_*
+AGENTS.md
+SKILLS.md
 MIGRATION.md
 TODO.md
 README.md
 notes/
+verify/
 *.log
 *.tar
 *.tar.gz
@@ -18,4 +22,6 @@ notes/
 # python build artifacts (exist on disk from local dev, never needed in ctx)
 **/__pycache__/
 **/*.egg-info/
+**/.venv/
+**/.pytest_cache/
 build_files/python-packages/**/build/

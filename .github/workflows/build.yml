@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}" # do not edit
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 1/6 — Copr metadata availability"
+          banner "Stage 1/7 — Copr metadata availability"
           echo "::group::Polling consumed COPRs (up to 30 attempts × 60s)"
           URLS=(
             "https://download.copr.fedorainfracloud.org/results/lionheartp/Hyprland/fedora-44-x86_64/repodata/repomd.xml"
@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 2/6 — Maximize build space"
+          banner "Stage 2/7 — Maximize build space"
           step "before:"
           df -h / /mnt | sed 's/^/      /'
 
@@ -96,19 +96,29 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
-      - name: Check Just Syntax
+      - name: Install shellcheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+
+      # Both syntax gates, not just `check`. A scheduled build used to be able
+      # to go red on a shellcheck regression that landed via a path-ignored
+      # push, because only lint.yml ran `just lint` and only on PR/push.
+      - name: Check Just + shell syntax
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 3/6 — just check"
+          banner "Stage 3/7 — just check + just lint"
           just check && ok "just check passed"
+          just lint && ok "just lint passed"
 
       - name: Image Name
         id: image-name
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 4/6 — Resolve image identity"
+          banner "Stage 4/7 — Resolve image identity"
           IMAGE_NAME=$(just image_name)
           ok "IMAGE_NAME=${IMAGE_NAME}"
           echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_ENV"
@@ -137,7 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 5/6 — podman build (all 17 stages)"
+          banner "Stage 5/7 — podman build (all 18 stages)"
           echo "::group::just build ${IMAGE_NAME} ${DEFAULT_TAG}"
           just build \
             "${IMAGE_NAME}" \
@@ -145,15 +155,27 @@ jobs:
           echo "::endgroup::"
           ok "image built"
 
+      # The verify/ suite tests properties no in-build gate covers (chezmoi
+      # --global wiring and timer semantics, the ujust --choose chooser
+      # plumbing, the brew payload end state from OUTSIDE the build). It was
+      # written, committed and then never executed by anything — wire it here.
+      - name: Image-side verification suite
+        run: |
+          set -euo pipefail
+          source .github/log-helpers.sh
+          banner "Stage 6/7 — Image-side verification (verify/)"
+          just verify-image "${IMAGE_NAME}" "${DEFAULT_TAG}"
+          ok "all image-side verifications passed"
+
       # Distinctive package census: run the freshly built image and write the
       # report to the run summary (GITHUB_STEP_SUMMARY) plus a ::notice::
       # annotation. The census is also baked into the image at
-      # /usr/share/halcyon/package-count by build_files/final-verify.
+      # /usr/share/halcyon/package-count by build_files/finish/final-verify.
       - name: Package count report
         run: |
           set -euo pipefail
           source .github/log-helpers.sh
-          banner "Stage 6/6 — Package census + tags + push + sign"
+          banner "Stage 7/7 — Package census + tags + push + sign"
           INFO=$(podman run --rm --entrypoint /bin/bash "${IMAGE_NAME}:${DEFAULT_TAG}" -c \
             'echo "count=$(rpm -qa | wc -l)"; echo "kernel=$(rpm -q --qf "%{VERSION}-%{RELEASE}.%{ARCH}" kernel-p03 2>/dev/null || echo n/a)"')
           COUNT=$(sed -n 's/^count=//p' <<< "$INFO")

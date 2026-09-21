@@ -33,9 +33,12 @@ chmod 0644 /usr/share/ublue-os/image-info.json
 # Signed-rebase support (ublue-os/config pattern): ship the cosign public
 # key plus a sigstore policy entry so `bootc switch
 # --enforce-container-sigpolicy ostree-image-signed:...` verifies out of the box.
-install -Dm0644 /ctx/cosign.pub /usr/etc/pki/containers/halcyon.pub
-install -d /etc/pki/containers
-ln -sf /usr/etc/pki/containers/halcyon.pub /etc/pki/containers/halcyon.pub
+#
+# IMPORTANT: the key goes in /etc/pki/containers, NOT /usr/etc. fedora-bootc
+# ships a real /etc; creating a parallel /usr/etc tree is exactly what
+# `bootc container lint` flags as etc-usretc, which is a FATAL lint and used
+# to fail the build one stage after branding-verify passed.
+install -Dm0644 /ctx/cosign.pub /etc/pki/containers/halcyon.pub
 install -d /etc/containers/registries.d
 cat >/etc/containers/registries.d/halcyon.yaml <<'YAML'
 docker:
@@ -49,7 +52,7 @@ cat >/etc/containers/policy.json <<'POLICY'
     "default": [{"type": "insecureAcceptAnything"}],
     "transports": {
         "docker": {
-            "ghcr.io/aahsnr-work/halcyon": [{"type": "sigstoreSigned", "keyPath": "/usr/etc/pki/containers/halcyon.pub"}]
+            "ghcr.io/aahsnr-work/halcyon": [{"type": "sigstoreSigned", "keyPath": "/etc/pki/containers/halcyon.pub"}]
         }
     }
 }

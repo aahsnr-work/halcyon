@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
-# halcyon build step — configure-system (units, services, chezmoi + brew wiring)
-# (ujust machinery + pyprland unit + flatpak user unit are wired in their own
-# stages; the brew payload is baked in the brew stage — this stage enables the
-# seed/catch-up/update units.)
+# halcyon build step — configure-system (units, services, greetd + chezmoi +
+# brew wiring). The ujust machinery, the pyprland unit and the flatpak user
+# unit are wired in their own stages; the brew payload is baked in the brew
+# stage — this stage enables the seed/catch-up/update units.
 set -euo pipefail
+
+echo "::group::configure-system — greetd configuration (post-RPM)"
+# These two files are RPM-owned paths (greetd ships /etc/greetd/config.toml
+# and /etc/pam.d/greetd). system_files/shared is COPY'd BEFORE any package
+# install, so shipping them there meant the Stage 04 greetd install could
+# silently overwrite them. Installing from /ctx here — after the package
+# exists — makes the final state deterministic instead of ordering-dependent.
+install -Dm0644 /ctx/desktop/greetd/config.toml /etc/greetd/config.toml
+install -Dm0644 /ctx/desktop/greetd/greetd.pam  /etc/pam.d/greetd
+echo "  OK    /etc/greetd/config.toml + /etc/pam.d/greetd installed over the RPM defaults"
+echo "::endgroup::"
+
 echo "::group::configure-system — units + services"
 # systemd units ship via the system_files overlay (usr/lib/systemd);
 # this stage wires enablement only
@@ -11,6 +23,9 @@ echo "::group::configure-system — units + services"
 # /nix bind mount over the /var/nix store root)
 systemctl enable greetd.service getty@tty2.service 2>/dev/null || true
 systemctl enable var-nix.service nix.mount 2>/dev/null || true
+# input stack: both packages are installed by the gaming group and are
+# useless without their units running (bazzite enables both).
+systemctl enable input-remapper.service 2>/dev/null || true
 # brew: pre-login offline seeding at boot + the blue-build update/upgrade
 # timers (payload is baked by build_files/brew/install-brew-bundle)
 systemctl enable halcyon-brew-bundle.service 2>/dev/null || \
@@ -29,6 +44,10 @@ done
 mkdir -p /etc/systemd/user/default.target.wants /etc/systemd/user/timers.target.wants
 # pyprland: Hyprland companion daemon
 ln -sf /usr/lib/systemd/user/pyprland.service /etc/systemd/user/default.target.wants/pyprland.service 2>/dev/null || true
+# ydotool: uinput daemon the ujust/gaming recipes drive
+if [ -f /usr/lib/systemd/user/ydotool.service ]; then
+  ln -sf /usr/lib/systemd/user/ydotool.service /etc/systemd/user/default.target.wants/ydotool.service
+fi
 # chezmoi: first-login init + update timer (blue-build chezmoi module wiring:
 # `systemctl --global enable chezmoi-init.service chezmoi-update.timer`)
 systemctl --global enable chezmoi-init.service chezmoi-update.timer 2>/dev/null || {

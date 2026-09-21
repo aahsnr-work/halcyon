@@ -48,6 +48,7 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
 - **Desktop:** `hyprland-git`, `noctalia-git`, `noctalia-greeter-git`,
   `xdg-desktop-portal-{hyprland,gtk}` from COPR `lionheartp/Hyprland`;
   greetd login (tty2 escape hatch); kitty, thunar, papers, gnome-keyring.
+  Xwayland only — no full Xorg server.
 - **Gaming:** `steam` (with the bazzite-steam wrappers and desktop-entry
   wiring), `gamescope`, `mangohud` (+i686), `gamemode`, `lutris`,
   `scx-scheds`/`scx-tools`, `umu-launcher`, `bazaar`, `bazzite-portal`,
@@ -56,10 +57,10 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
   again at finalize), zed, emacs-pgtk, neovim; Obsidian, Zotero, Pyprland,
   TeX Live and a Python helper family baked at build time.
 - **Tooling:** the former brew formulas as RPMs (bat, eza, fzf, lazygit,
-  ripgrep, starship, yazi, zellij, …) **plus a baked Homebrew payload**
-  (22 formulas incl. `bun`, `pixi`, `opencode` — brewed at build time into
-  `/usr/share/halcyon/brew-bundle.tar.zst`, seeded pre-login offline by
-  `halcyon-brew-bundle.service`; RPMs keep PATH priority), chezmoi (Fedora
+  ripgrep, starship, yazi, zellij, …) **plus a small baked Homebrew payload**
+  (only `bun`, `pixi` and `opencode` — the three formulas Fedora and Terra do
+  not ship; brewed at build time into `/usr/share/halcyon/brew-bundle.tar.zst`,
+  seeded pre-login offline by `halcyon-brew-bundle.service`), chezmoi (Fedora
   RPM) wired to
   [aahsnr-configs/dotfiles](https://github.com/aahsnr-configs/dotfiles)
   (first-login init + update timer, blue-build module semantics), nix via the
@@ -71,29 +72,36 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
 
 ---
 
-## Repo structure (bazzite template)
+## Repo structure
+
+`build_files/` is organized into one folder per build phase; the
+**Containerfile is the single source of ordering truth** — the folders carry
+no numbering of their own.
 
 ```
-├── Containerfile            # the single source of build-order truth
-├── build_files/             # semantic unnumbered helpers (never in the image)
-│   ├── packages.json        # SINGLE SOURCE OF TRUTH for every dnf/flatpak package
-│   ├── packages-lib         # jq accessors the stages source (fail-fast validation)
-│   ├── remove-packages      #   removals SECOND — JSON-driven, rpm-resolved
-│   ├── setup-repos          #   FIRST — jq/dnf5-plugins bootstrap + RPM Fusion
-│   │                        #   (NVIDIA-excluded) + negativo17
-│   ├── install-kernel       #   p03 + nvidia-open (COPR per-use)
-│   ├── install-packages     #   core/desktop/gaming/apps (repos per-use)
-│   ├── install-terra        #   USER-EDITABLE Terra list (Terra-exclusive)
-│   ├── install-devtools / install-nix / setup-flatpaks / install-built-apps
-│   ├── setup-ujust / configure-system / image-info / build-initramfs
-│   ├── finalize             #   third-party repo sweep + end-of-build hygiene
-│   ├── *-verify             #   per-level gates (fail fast at that level)
-│   ├── cleanup              #   end-of-RUN temp/log//boot wipe
-│   └── python-packages/     #   build-time staged Python helper sources
-└── system_files/
-    └── shared/              # root overlay COPYed into the image
-        ├── etc/             #   greetd, pam, profile.d, environment.d, …
-        └── usr/             #   units, tmpfiles, ujust modules, plymouth, /usr/bin
+├── Containerfile              # 18 RUN stages + hermetic bootc lint
+├── Justfile                   # check / fix / lint / test-python / build / verify-image
+├── halcyon.env                # dotenv consumed by the Justfile
+├── packages.json              # SINGLE SOURCE OF TRUTH for every dnf/flatpak package
+├── cosign.pub                 # public signing key (shipped to /etc/pki/containers)
+├── build_files/               # the `ctx` stage — never ends up in the image
+│   ├── packages-lib           #   jq accessors the stages source (fail-fast)
+│   ├── cleanup                #   end-of-RUN temp/log//boot wipe
+│   ├── libdnf5.conf.d/        #   dnf5 retry drop-in (installed in Stage 00)
+│   ├── base/                  #   setup-repos, remove-packages
+│   ├── kernel/                #   install-kernel + kernel-verify (p03 + nvidia-open)
+│   ├── packages/              #   install-packages / -terra / -devtools + packages-verify
+│   ├── brew/                  #   install-brew-bundle + brew-verify
+│   ├── runtime/               #   install-nix, setup-flatpaks, setup-ujust + verifies
+│   ├── apps/                  #   obsidian/zotero/pyprland/texlive/python + verify
+│   ├── desktop/               #   configure-system, image-info, plymouth, greetd/
+│   ├── finish/                #   build-initramfs, finalize, final-verify
+│   └── python-packages/       #   11 stdlib-only src-layout Python tools
+├── system_files/
+│   └── shared/                # root overlay COPYed into the image
+│       ├── etc/               #   pam, profile.d, environment.d, …
+│       └── usr/               #   units, tmpfiles, ujust modules, plymouth, /usr/bin
+└── verify/                    # image-side suites run by CI against the built image
 ```
 
 Build order and per-level verification are visible in `Containerfile`; every
@@ -112,22 +120,25 @@ never hardcode package lists: each stage sources `build_files/packages-lib`
 and reads its group with jq, and the build **fails fast** if the JSON is
 malformed.
 
-| Group | Resolved from | Consumed by |
-|---|---|---|
-| `fedora-core` | Fedora | install-packages |
-| `fedora-hardware` | Fedora | install-packages |
-| `hyprland-copr` | COPR `lionheartp/Hyprland` | install-packages |
-| `gaming` | Fedora + RPM Fusion | install-packages |
-| `bazaar-copr` | COPR `ublue-os/packages` | install-packages |
-| `zen-copr` | COPR `sneexy/zen-browser` | install-packages |
-| `vendor-apps` / `vendor-apps-optional` | per-use vendor repos (VS Code, Brave) | install-packages |
-| `fedora-devtools` | Fedora | install-devtools |
-| `nix` | Fedora | install-nix |
-| `flatpak` | Fedora | setup-flatpaks |
-| `ujust-copr` / `ujust-fedora` | COPR `ublue-os/packages` / Fedora | setup-ujust |
-| `terra` | **Terra only** (`--disablerepo='*'`) | install-terra |
-| `all.exclude.all` | removals — resolved through `rpm -qa`, absent names tolerated | remove-packages |
-| `flatpak.install` / `flatpak.remove` | Flathub (user repo, at first login) | setup-flatpaks |
+Groups are keyed by **the repo a package resolves from**, not by what it does.
+
+| Group                                  | Resolved from                                                 | Consumed by      |
+| -------------------------------------- | ------------------------------------------------------------- | ---------------- |
+| `fedora-core`                          | Fedora                                                        | install-packages |
+| `fedora-hardware`                      | Fedora                                                        | install-packages |
+| `fedora-editors`                       | Fedora                                                        | install-packages |
+| `hyprland-copr`                        | COPR `lionheartp/Hyprland`                                    | install-packages |
+| `gaming`                               | Fedora + RPM Fusion                                           | install-packages |
+| `bazaar-copr`                          | COPR `ublue-os/packages`                                      | install-packages |
+| `zen-copr`                             | COPR `sneexy/zen-browser`                                     | install-packages |
+| `vendor-apps` / `vendor-apps-optional` | per-use vendor repos (VS Code, Brave)                         | install-packages |
+| `fedora-devtools`                      | Fedora                                                        | install-devtools |
+| `nix`                                  | Fedora                                                        | install-nix      |
+| `flatpak`                              | Fedora                                                        | setup-flatpaks   |
+| `ujust-copr` / `ujust-fedora`          | COPR `ublue-os/packages` / Fedora                             | setup-ujust      |
+| `terra`                                | **Terra only** (`--disablerepo='*'`)                          | install-terra    |
+| `all.exclude.all`                      | removals — resolved through `rpm -qa`, absent names tolerated | remove-packages  |
+| `flatpak.install` / `flatpak.remove`   | Flathub (user repo, at first login)                           | setup-flatpaks   |
 
 **To add a package:** put its name in the group matching the repo it resolves
 from, then rebuild (`just build localhost/halcyon latest`). Only if a brand-new
@@ -143,18 +154,25 @@ Rules the stages enforce while consuming the catalog:
 - third-party repos are enabled only inside the stage that consumes them,
   disabled immediately after, and deleted by `finalize`;
 - the comps group `@custom-environment` and the Terra repo-bootstrap packages
-  (`terra-release*`) stay in their scripts — they are not catalog entries.
+  (`terra-release*`) stay in their scripts — they are not catalog entries;
+- a few entries exist purely as **build-tool preconditions** (`zstd`,
+  `util-linux-core`, `gnupg2`, `jq`, `gcc-c++`) — `packages-verify` gates
+  them so they cannot be pruned as "unused".
 
 ---
 
 ## Build & CI
 
+- `lint.yml` (PR, push, manual): `just check` + `just lint`, the `.github`
+  audit (`verify/verify-github.sh`), and the Python helper test suites.
 - `build.yml` (daily cron 08:00 UTC, push, PR, manual): polls the consumed
-  COPRs for healthy metadata, frees runner disk, builds with
-  `podman build --pull`, writes a **package-count report** to the run summary,
-  then signs with cosign (`SIGNING_SECRET`) and publishes to GHCR.
-- Local test build: `just build localhost/halcyon latest` (equivalent to CI,
-  including the OCI/artifacthub label scheme)
+  COPRs for healthy metadata, frees runner disk, runs both syntax gates,
+  builds with `podman build --pull`, runs the **image-side verify suite**
+  (`verify/verify-{brew,chezmoi,ujust}.sh`) against the built image, writes a
+  **package-count report** to the run summary, then signs with cosign
+  (`SIGNING_SECRET`) and publishes to GHCR.
+- Local test build: `just build localhost/halcyon latest`, then
+  `just verify-image localhost/halcyon latest`.
 - OCI labels (`org.opencontainers.image.*`) are set from
   `--build-arg IMAGE_VERSION=<fedora>.<date>` and `SOURCE_SHA=<git sha>`
   (CI supplies both). `bootc container lint` runs network-isolated as the
@@ -163,6 +181,8 @@ Rules the stages enforce while consuming the catalog:
 ---
 
 ## Credits & licenses
+
+Apache-2.0 — see `LICENSE`.
 
 - [Universal Blue](https://universal-blue.org) & [Bazzite](https://bazzite.gg)
   (Apache-2.0) — the project structure this repo follows and the gaming stack.

@@ -10,14 +10,13 @@ rebase-to-custom tag="latest":
     echo "Rebasing system to ${IMAGE}..."
     if command -v bootc >/dev/null 2>&1; then
         sudo bootc switch "${IMAGE}"
-    elif command -v rpm-ostree >/dev/null 2>&1; then
-        sudo rpm-ostree rebase "ostree-unverified-registry:${IMAGE}"
     else
-        echo "Neither bootc nor rpm-ostree was detected on this system." >&2
+        echo "bootc was not detected on this system." >&2
+        echo "halcyon is a bootc image — there is no legacy-ostree fallback path." >&2
         exit 1
     fi
     echo "Rebase prepared successfully!"
     echo "Reboot into the new deployment:  systemctl reboot"
     echo "After reboot, switch to the signed tag (README: Install / rebase):"
     echo "  sudo bootc switch --enforce-container-sigpolicy ostree-image-signed:docker://ghcr.io/aahsnr-work/halcyon:{{tag}}"
-    echo "  (the image ships /usr/etc/pki/containers/halcyon.pub + a sigstore policy entry — verification is enforced by policy.json)"
+    echo "  (the image ships /etc/pki/containers/halcyon.pub + a sigstore policy entry — verification is enforced by policy.json)"
