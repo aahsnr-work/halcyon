@@ -77,3 +77,9 @@ Search the web, think for longer and determine the best approach to achieve this
   - [x] **Instead of using texlive-full I decided to use texlive-medium to reduce the size of the final image. However, there will be texlive packages that I would have otherwise installed using tlmgr from time to time. The texlive bash script needs the ability to install individual texlive packages as well.**
 
 - [x] **Make sure correct order is used for everything.
+
+- [ ] `Important`: Where does bazzite get its tpm-unlock ujust recipe?
+
+- [ ] `Important`: Useful packages from ublue-os/packages copr: ublue-os-just, ublue-os-luks, ublue-os-selinux-workarounds `
+
+- [ ] `Important`: Verify if ublue-recipes or just package provide the common just recipes?

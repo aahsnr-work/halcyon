@@ -42,12 +42,14 @@ build fails with `no match for argument`.
 ### Why this exists
 
 Package names in this repo have moved twice already: Terra retired
-`terra-gamescope` and `terra-mangohud`, and `lazygit` ships as
-`golang-github-jesseduffield-lazygit`. `dnf5` aborts the **whole transaction**
-if a single argument does not resolve, so one wrong name kills an entire stage
-and burns a ~40-minute CI build. Never guess a name from upstream's README —
-upstream's project name and Fedora's package name frequently differ
-(`dust` vs `du-dust`, `fd` vs `fd-find`, `ripgrep` provides `rg`).
+`terra-gamescope` and `terra-mangohud` (Fedora 44 ships `gamescope` +
+`mangohud` directly now), and `lazygit` ships as
+`golang-github-jesseduffield-lazygit` in Terra. `dnf5` aborts the **whole
+transaction** if a single argument does not resolve, so one wrong name kills an
+entire stage and burns a ~40-minute CI build. Never guess a name from
+upstream's README — upstream's project name and Fedora's package name
+frequently differ (`dust` vs `du-dust`, `fd` vs `fd-find`, `ripgrep` provides
+`rg`, and on F44 the `wget` binary comes from `wget2-wget`).
 
 ### Steps
 
@@ -91,17 +93,23 @@ upstream's project name and Fedora's package name frequently differ
    ```
 
 5. Record the verified name **and the repo it came from** in a comment next to
-   the package in the install list, using the existing style:
-   `# NOTE: lazygit ships under its Go name in Terra`.
+   the package in `packages.json` (the group's `_docs` entry), using the
+   existing style: `# NOTE: lazygit ships under its Go name in Terra`.
 
 ### Rules
 
 - A package must be sourced from exactly one repo, and that repo must be the
   one the stage has enabled. Terra packages never fall back to Fedora — that is
   enforced by `--disablerepo='*' --enablerepo='terra*'` and it is deliberate.
-- If a package is genuinely optional, it gets `|| true` at install **and** must
-  not be a hard gate in any `*-verify` script. Mismatches here (`bazaar` today)
-  are a recurring source of red builds.
+- If a package is genuinely optional, it gets `|| true` at install (the only
+  tolerated installs today are the `custom-environment` comps group and
+  `vendor-apps-optional`/brave-origin) **and** must not be a hard gate in any
+  `*-verify` script. A hard gate on a tolerated install is a red build waiting
+  to happen.
+- `install-terra` and `install-devtools` have no `-verify` companion — each
+  `rpm -q`s every listed package inside the stage and fails on the first miss.
+  A new package in those groups is verified by that inline loop plus
+  `final-verify`'s keeper/devtools gates, not by a new script.
 
 ---
 
@@ -119,7 +127,7 @@ subsystem, a new class of software, a new configuration phase.
 1. **Name the script** `build_files/<folder>/<verb>-<subject>`, extensionless,
    matching the existing vocabulary (`install-*`, `setup-*`, `configure-*`,
    `build-*`, `remove-*`). Pick the folder by build phase — `base/ kernel/
-packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
+   packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
 
    ```bash
    git add build_files/runtime/install-foo
@@ -144,7 +152,13 @@ packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
    echo "::endgroup::"
    ```
 
-3. **Insert the `RUN` block** in `Containerfile` with a stage banner:
+3. **Insert the `RUN` block** in `Containerfile`. Stages are numbered 00–17 and
+   every banner is a literal `████ STAGE nn/17 · <script> · <summary> ████`
+   (the `nn/17` suffix is a per-stage counter, not the number of a future
+   stage — a 19th stage would keep `nn/17` banners). Mirror the surrounding
+   mount style: `type=cache,id=dnf-cache,target=/var/cache/libdnf5` when the
+   stage touches `dnf5` (the brew, configure-system and image-info stages
+   deliberately have no cache mount), plus the read-only ctx bind:
 
    ```dockerfile
    # ---- Stage N: foo ----------------------------------------------------------
@@ -156,9 +170,13 @@ packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
 
    Drop the `type=cache` mount if the stage never touches `dnf5`.
 
+4. **Add the `<stage>-verify` companion in the same `RUN`** unless the stage is
+   an install stage that self-verifies (install-terra, install-devtools) or its
+   output is inherently cross-cutting (build-initramfs → `final-verify`).
+
 5. **Renumber the stage comments** below your insertion point. They are
    referenced in commit messages and CI logs; leaving them stale is worse than
-   not numbering at all.
+   not numbering at all. Banners are `nn/17` regardless.
 
 6. Run `just check && just lint`. Both walk `build_files` recursively, so a
    script in any phase folder is picked up automatically with no Justfile edit.
@@ -166,15 +184,16 @@ packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
 ### Placement rules (in order of precedence)
 
 - **Anything that must end up in the initramfs** (dracut hooks, plymouth
-  assets, kernel module config) goes **before** `build-initramfs`, which is
-  deliberately last.
+  assets, kernel module config) goes **before** `build-initramfs` (Stage 14),
+  which is deliberately last so the theme and NVIDIA hooks are baked in.
 - **Anything that enables a third-party repo** goes before `finalize`, which
   sweeps repo files, and must disable its own repo anyway.
 - **Anything that needs tooling from `install-packages`** (ImageMagick, jq,
   python3, gcc) goes after it. `build-plymouth-assets` fails hard without
   `magick` for exactly this reason.
-- **Anything that mutates `/var`, `/tmp` or `/boot`** must be followed by
-  `/ctx/cleanup` — no exceptions.
+- **Every mutating stage ends with `/ctx/cleanup`** — the single exception is
+  `finalize`, which is itself the hygiene sweep. `final-verify` and the bootc
+  lint mutate nothing and do not call it either.
 - **Nothing** goes after the `bootc container lint` block; it runs
   `--network=none` on a tmpfs `/run` and is the hermetic final gate.
 
@@ -202,15 +221,23 @@ packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
 
 2. Pick the destination by **source repo**, not by what the package does:
 
-   | Source                           | Where                                               | How                                           |
-   | -------------------------------- | --------------------------------------------------- | --------------------------------------------- |
-   | Fedora (core/hardware)           | `packages.json` → `fedora-core` / `fedora-hardware` | alphabetical in the group                     |
-   | Fedora (editors/runtimes)        | `packages.json` → `fedora-editors`                  | alphabetical                                  |
-   | Fedora (CLI dev tooling)         | `packages.json` → `fedora-devtools`                 | alphabetical                                  |
-   | Fedora (ujust recipe dependency) | `packages.json` → `ujust-fedora`                    | and add a `command -v` gate to `ujust-verify` |
-   | Terra                            | `packages.json` → `terra`                           | resolves exclusively from Terra               |
-   | A COPR                           | `packages.json` → that COPR's group                 | the stage owns `copr enable`/`disable`        |
-   | Vendor repo (MS, Brave)          | `packages.json` → `vendor-apps`                     | ONLY if it truly resolves from that repo      |
+   | Source                           | Where                                    | How                                           |
+   | -------------------------------- | ---------------------------------------- | --------------------------------------------- |
+   | Fedora (core/hardware)           | `packages.json` `fedora-core` / `fedora-hardware` | alphabetical in the group            |
+   | Fedora (editors/runtimes)        | `packages.json` `fedora-editors`         | alphabetical                                  |
+   | Fedora (CLI dev tooling)         | `packages.json` `fedora-devtools`        | alphabetical                                  |
+   | Fedora (ujust recipe dependency) | `packages.json` `ujust-fedora`           | and add a `command -v` gate to `ujust-verify` |
+   | Terra                            | `packages.json` `terra`                  | resolves exclusively from Terra               |
+   | COPR lionheartp/Hyprland         | `packages.json` `hyprland-copr`          | consumed by `install-packages` (Stage 04)     |
+   | COPR ublue-os/packages (bazaar)  | `packages.json` `bazaar-copr`            | consumed by `install-packages` (Stage 04)     |
+   | COPR sneexy/zen-browser          | `packages.json` `zen-copr`               | consumed by `install-packages` (Stage 04)     |
+   | COPR ublue-os/packages (ujust)   | `packages.json` `ujust-copr`             | consumed by `setup-ujust` (Stage 11)          |
+   | Vendor repo (MS, Brave)          | `packages.json` `vendor-apps`            | ONLY if it truly resolves from that repo      |
+   | Vendor, may be absent            | `packages.json` `vendor-apps-optional`   | installed with `|| true` (skip-unavailable)   |
+
+   Note: `ublue-os/packages` is consumed by **two** stages (`install-packages`
+   for `bazaar-copr`, `setup-ujust` for `ujust-copr`); each stage does its own
+   `copr enable`/`copr disable`.
 
 3. Always `--setopt=install_weak_deps=False`. If the package relied on a weak
    dependency, list that dependency explicitly too — this is why
@@ -239,18 +266,21 @@ packages/ brew/ runtime/ apps/ desktop/ finish/`. Commit it executable:
    ```
 
    Copr's CDN 504s intermittently; a COPR that is consumed but not polled turns
-   into a random red build.
+   into a random red build. `verify-github.sh` also requires the COPR to be in
+   the monitor list.
 
 7. **Check for a contradiction with the removals stage.** `remove-packages`
-   runs *first*; if your package is on its list, you now have two files
-   disagreeing (`gamemode` is currently in this state: removed in
-   `remove-packages`, reinstalled in `install-packages`, soft-warned about in
-   `guarded-removals`). Resolve it in one direction and delete the other
-   mention.
+   runs *first* against `packages.json`'s `all.exclude.all`; if your package is
+   on that list and you are (re)installing it anyway, `remove-packages`
+   resolves the list through `rpm -qa` first so a missing name is tolerated —
+   but say in a comment why the pair exists. (`fastfetch` is currently in both
+   `fedora-core` and `all.exclude.all`; the exclusion only bites when the base
+   ships it.) The old `guarded-removals` helper that used to warn about this is
+   gone — do not resurrect it.
 
-8. Add or extend the gate in the stage's `*-verify`. For a package that matters
-   to the finished image's identity (kernel, NVIDIA, gaming keepers), gate it in
-   `final-verify` instead.
+8. Add or extend the gate in the stage's `*-verify` (or the inline `rpm -q`
+   loop for terra/devtools). For a package that matters to the finished image's
+   identity (kernel, NVIDIA, gaming keepers), gate it in `final-verify` instead.
 
 ### Verify
 
@@ -301,13 +331,17 @@ echo "--- <stage>-verify: all checks passed ---"
    gate — it's a false assurance that survives refactors.
 4. Decide the level: stage-scoped facts go in `<stage>-verify`; cross-cutting
    facts that only the finished image can answer (kernel/NVIDIA end state, repo
-   sweep, keeper set, package census) go in `final-verify`.
+   sweep, keeper set, package census) go in `final-verify`. Terra and devtools
+   packages are verified by the inline `rpm -q` loops in their own stages plus
+   `final-verify` keeper gates — do not add a companion script for them.
 
 ### Gate forms that are wrong in this environment
- 
+
 - **`test -e /usr/lib/systemd/system/<target>.wants/<unit>`** — `systemctl
-enable` in a build container writes to `/etc/systemd/system/…`. Use
-  `systemctl is-enabled <unit>`.
+  enable` in a build container writes to `/etc/systemd/system/…` (and
+  user-level enablement is done with explicit symlinks into
+  `/etc/systemd/user/*.wants/`). Use `systemctl is-enabled <unit>` for system
+  units, `test -L` for the user-unit symlinks.
 - **A gate whose glob a later stage deletes.** `final-verify` once had
   `! grep -l "^enabled=1" /etc/yum.repos.d/terra*.repo | grep -q .` — but
   `finalize` deletes those files, so it passed unconditionally.
@@ -333,22 +367,30 @@ tmpfiles rule.
 
 | Goal | Where the file goes | How it is activated |
 | --- | --- | --- |
-| System unit | `system_files/shared/usr/lib/systemd/system/<u>` | `systemctl enable <u>` in `configure-system` |
-| User unit, every user | `system_files/shared/usr/lib/systemd/user/<u>` | explicit symlink into `/etc/systemd/user/default.target.wants/` in `configure-system` |
+| System unit | `system_files/shared/usr/lib/systemd/system/<u>` | `systemctl enable <u>` in `desktop/configure-system` |
+| User unit, every user | `system_files/shared/usr/lib/systemd/user/<u>` | explicit symlink into `/etc/systemd/user/default.target.wants/` in `desktop/configure-system` |
 | User timer, every user | same | symlink into `/etc/systemd/user/timers.target.wants/` |
 | Disable an inherited unit | — | `ln -sf /dev/null /etc/systemd/system/<u>` |
 | Patch a unit you do not own | `…/<u>.d/10-halcyon-<topic>.conf` | drop-in, created **unconditionally** |
 | Runtime state under `/var` | `system_files/shared/usr/lib/tmpfiles.d/<n>.conf` | `systemd-tmpfiles` at boot |
 
+Some user units are **generated by build stages** rather than shipped in the
+static tree — `pyprland.service` from `install-pyprland`,
+`halcyon-flatpak-setup.service` from `setup-flatpaks`. Wire them through the
+same symlinks and say where the file comes from at the wiring site.
+
 ### Steps
 
-1. Write the unit into the static tree. Units are plain files — no executable
-   bit.
-2. Wire activation in `build_files/configure-system`. The existing patterns:
+1. Write the unit into the static tree (or note the stage that generates it).
+   Units are plain files — no executable bit.
+2. Wire activation in `build_files/desktop/configure-system`. The existing
+   patterns (note the `systemctl enable … || ln -sf` fallbacks — in a build
+   container `systemctl enable` sometimes cannot write its own symlinks):
 
    ```bash
    # system units
    systemctl enable greetd.service getty@tty2.service 2>/dev/null || true
+   systemctl enable var-nix.service nix.mount 2>/dev/null || true
 
    # user units, --global equivalent: explicit symlinks
    mkdir -p /etc/systemd/user/default.target.wants /etc/systemd/user/timers.target.wants
@@ -367,23 +409,25 @@ tmpfiles rule.
 - **Never ship files into `/var` from a unit or a `COPY`.** `/var` content in
   the image is applied only at *initial provisioning*; upgrades never see it,
   and `bootc container lint` raises `var-tmpfiles`. Create the state with a
-  `tmpfiles.d` rule (`noctalia-greeter-state.conf`) or a oneshot unit
-  (`var-nix.service`).
-- **A drop-in must be created unconditionally.** `install-pyprland` writes its
-  `ConditionEnvironment=` drop-in inside the `else` branch that only runs when
-  upstream ships no unit — and upstream *does* ship one
-  (`systemd-unit/pyprland.service`), so the drop-in is never written and
-  `built-apps-verify` can never pass. If a drop-in must apply to both the
-  upstream-unit and inline-unit paths, it lives **outside** the `if`.
+  `tmpfiles.d` rule (`zz-halcyon-*.conf`, `noctalia-greeter-state.conf`) or a
+  oneshot unit (`var-nix.service`).
+- **A drop-in that must apply to both the upstream-unit path and a fallback
+  path is written unconditionally, outside the `if`.** `install-pyprland`
+  installs upstream's `systemd-unit/pyprland.service`, so its `else` branch
+  (inline unit) never runs — the `ConditionEnvironment=` drop-in therefore
+  lives *after* the `if` and is always written, and `built-apps-verify` gates
+  its content (`grep XDG_CURRENT_DESKTOP=Hyprland …/pyprland.service.d/`).
+  This was a shipping bug once (the drop-in sat inside the dead `else`); the
+  comment in `install-pyprland` explains the history — preserve it.
 - **`ConditionEnvironment=` on a user unit reads the systemd *user manager's*
   environment**, not the shell's. It only works if the session exports the
   variable into the manager (`dbus-update-activation-environment --systemd`, or
-  `systemctl --user import-environment`). Verify this in the Hyprland config
-  before relying on it; otherwise the condition silently never matches and the
-  unit never starts.
+  `systemctl --user import-environment`). The Hyprland/noctalia session startup
+  does this; without it the condition silently never matches and pyprland never
+  starts.
 - **First-login-only user units** use the `ConditionPathExists=!%h/…` +
-  `ExecStartPost` stamp-file pattern (`halcyon-flatpak-setup.service`,
-  `chezmoi-init.service`). Reuse it rather than inventing a new one.
+  `ExecStartPost` stamp-file pattern (`chezmoi-init.service`,
+  `halcyon-flatpak-setup.service`). Reuse it rather than inventing a new one.
 - **Enablement in a container is not enablement at runtime for presets.** If a
   package's `%post` would normally enable the unit and you installed with
   `tsflags=noscripts`, you must enable it yourself.
@@ -411,49 +455,48 @@ tmpfiles rule.
    ```
 
 2. **Register a new module file** by adding its filename to the `for f in …`
-   loop in `build_files/setup-ujust`, which generates
-   `/usr/share/ublue-os/just/60-custom.just`. A module that is not in that loop
-   is shipped but never imported.
+   loop in `build_files/runtime/setup-ujust` (Stage 11), which writes
+   `/usr/share/ublue-os/just/60-custom.just` (imported by
+   `/usr/share/ublue-os/justfile`). A module that is not in that loop is
+   shipped but never imported.
 
 3. **Syntax-check the body.** `just --fmt --check` does *not* parse recipe
-   bodies — a missing `fi` ships silently and `ujust --list` still works. The
-   `password-feedback` recipe in `80-halcyon.just` is broken today for exactly
-   this reason. Check every recipe in a module:
+   bodies — but the `check` recipe's "recipe bodies" group already extracts
+   every body from each module and runs `bash -n` on it (the exact loop below),
+   and `just check` runs in CI. If a body carries a missing `fi`, `just check`
+   finds it before the ~40-minute build does:
 
    ```bash
    f=system_files/shared/usr/share/ublue-os/just/80-halcyon.just
    for r in $(just -f "$f" --summary 2>/dev/null); do
-     body=$(just -f "$f" --show "$r" | sed '1d' | sed 's/{{[^}]*}}/PLACEHOLDER/g')
-     grep -q '#!' <<<"$body" || continue        # non-shebang recipes are just-syntax
-     bash -n <<<"$body" || echo "SYNTAX ERROR in recipe: $r"
+     body=$(just -f "$f" --show "$r" 2>/dev/null) || continue
+     printf '%s\n' "$body" | awk 'f{print} /^#!/{f=1}' | bash -n \
+       || echo "SYNTAX ERROR in recipe: $r"
    done
    ```
-
-   Consider adding this loop to the `check` recipe in the root `Justfile` so it
-   runs in CI.
 
 4. **De-Bazzite anything vendored.** Before committing, grep the recipe for all
    of these and resolve each one:
 
-   | Pattern | Why it breaks here | Fix |
+   | Pattern | Status in this repo | What to do |
    | --- | --- | --- |
-   | `rpm-ostree` | not present on bootc | `grubby --update-kernel=ALL --args=/--remove-args=`; read `/proc/cmdline`; `bootc status` |
-   | `/usr/libexec/bazzite-boot-remount` | not shipped | vendor the helper or drop the recipe |
-   | `ugum` | wraps `gum`, not installed | use `Choose` from `/usr/lib/ujust/ujust.sh` |
-   | `fpaste`, `wl-copy`, `zenity`, `kdialog` | not installed | install the package or drop the feature |
-   | `/usr/share/ublue-os/image-info.json` | nothing generates it | generate it in `image-info` first |
+   | `rpm-ostree` | not on bootc | use `grubby --update-kernel=ALL --args=/--remove-args=`, read `/proc/cmdline`, `bootc status` — but `halcyon-rebase.just` deliberately keeps a `command -v rpm-ostree` fallback so the rebase recipe works on non-bootc hosts; keep that pattern, do not copy it to new recipes |
+   | `/usr/libexec/bazzite-boot-remount` | **vendored** at `system_files/shared/usr/libexec/bazzite-boot-remount` | `source /usr/libexec/bazzite-boot-remount` like `80-halcyon.just` does; keep the vendored copy in sync with upstream |
+   | `ugum` | shipped by `ublue-os-just`; falls back to fzf when `gum` is absent (only fzf is gated) | `80-halcyon.just` uses `Choose` from `/usr/lib/ujust/ujust.sh`; `81-halcyon-fixes.just` still calls `ugum choose` directly — either is fine, be consistent within a module |
+   | `fpaste`, `wl-copy`, `zenity` | installed (fedora-devtools / gaming) and gated by `ujust-verify` with `command -v` | you can rely on them, but keep the gate |
+   | `kdialog`, `gum` | not installed | use `Choose`, or install the package first |
+   | `/usr/share/ublue-os/image-info.json` | generated by `desktop/image-info` (Stage 13) | you can rely on it; `bazzite-steam`, `bazzite-steam-firstrun` and `83-halcyon-audio` already read it |
 
 5. Interactive recipes `source /usr/lib/ujust/ujust.sh` and use `Choose`,
    `${bold}`, `${green}`, `${normal}`. Expose a `status` action that prints a
    machine-readable token (`enable`/`disable`) — the existing recipes all do,
    and Bazzite's portal UI depends on that convention.
 
-6. Add a gate to `ujust-verify`. Consider a repo-wide guard:
-
-   ```bash
-   gate "no rpm-ostree in recipes" \
-     sh -c '! grep -rl "rpm-ostree" /usr/share/ublue-os/just/*.just | grep -q .'
-   ```
+6. Add a gate to `ujust-verify` for every binary the recipe shells out to
+   (`command -v`). There is deliberately **no** repo-wide "no rpm-ostree in
+   recipes" gate — `halcyon-rebase.just` keeps a supported `rpm-ostree`
+   fallback, so such a gate could never pass. If you remove that fallback, add
+   the gate.
 
 ---
 
@@ -495,8 +538,9 @@ tmpfiles rule.
 3. **Stdlib only.** All eleven packages share one venv at
    `/usr/lib/halcyon-python` with no dependency resolution safety net; a pip
    dependency would have to be vendored or the venv redesigned. Runtime *tool*
-   dependencies (`fd`, `fzf`, `bat`, `rg`, `grim`, `swappy`, `slurp`) come from
-   the RPM layer and are checked at startup:
+   dependencies (`fd`, `fzf`, `bat`, `rg`, `grim`, `swappy`, `slurp`) come
+   from the RPM layer (`fedora-devtools` / `fedora-core`) and are checked at
+   startup:
 
    ```python
    missing = [t for t in REQUIRED_TOOLS if shutil.which(t) is None]
@@ -512,20 +556,20 @@ tmpfiles rule.
    - colors only when `sys.stdout.isatty()`.
 
 5. **Register in three places** — missing any one fails the build:
-   - the `EXPECTED` array in `build_files/install-python-packages`;
+   - the `EXPECTED` array in `build_files/apps/install-python-packages`;
    - the table in `build_files/python-packages/README.md`;
-   - the `for b in …` loop in `build_files/built-apps-verify`.
+   - the `for b in …` loop in `build_files/apps/built-apps-verify`.
 
 6. **The build-time smoke test is `-h` or `--version`, and it is not enough.**
    It never reaches the code that does the work, and `py_compile` only checks
    syntax — a missing import is invisible to both (it shipped in `rmi`).
-   `just lint-python` runs ruff for undefined names (F821) and syntax errors.
-   Add a `tests/` directory for anything with side effects, and list the package
-   in the `for pkg in …` loop of the `test-python` recipe.
+   `just lint-python` runs ruff for undefined names (F821/F822/F823) and syntax
+   errors (E9). Add a `tests/` directory for anything with side effects, and
+   list the package in the `for pkg in …` loop of the `test-python` recipe.
 
 ### Tests
 
-Only `dump-to-markdown` has a suite. To add one, mirror its `pyproject.toml`:
+`dump-to-markdown` and `rmi` have suites. To add one, mirror theirs:
 
 ```toml
 [project.optional-dependencies]
@@ -541,8 +585,9 @@ python3 -m venv .venv && .venv/bin/pip install -e './<name>[dev]'
 .venv/bin/pytest <name>
 ```
 
-Note that `just check`/`just lint` use `-maxdepth 1` and therefore **do not**
-reach into `python-packages/`. Run `pytest` yourself.
+Note that `just check`/`just lint` exclude `python-packages/` by design
+(`find … ! -path "*python-packages*"`). Run `pytest` via `just test-python`,
+not by relying on `just check`.
 
 ---
 
@@ -554,8 +599,10 @@ precedents).
 
 ### Steps
 
-1. New script `build_files/install-<app>`, invoked from
-   `build_files/install-built-apps` with `bash /ctx/install-<app>`.
+1. New script `build_files/apps/install-<app>`, invoked from
+   `build_files/apps/install-built-apps` (Stage 10) as `/ctx/apps/install-<app>`
+   — the scripts are executable and called directly, no `bash` prefix. Pick an
+   order in `install-built-apps` that matches dependencies.
 
 2. **Resolve the version at build time, with a pinned fallback.** Use the
    GitHub API with opportunistic auth so CI is not rate-limited:
@@ -563,16 +610,21 @@ precedents).
    ```bash
    GH_AUTH="${GH_TOKEN:-${GITHUB_TOKEN:-${BB_PASSWORD:-}}}"
    AUTH_ARGS=(); [ -n "${GH_AUTH}" ] && AUTH_ARGS=(-H "Authorization: Bearer ${GH_AUTH}")
-   API="$(curl --fail --retry 5 --retry-delay 2 -sSL "${AUTH_ARGS[@]}" \
-     'https://api.github.com/repos/<o>/<r>/releases?per_page=15' || true)"
    ```
 
-   Prefer `releases?per_page=N` + `jq` filtering over `releases/latest`:
-   `releases/latest` is periodically a platform-specific release with no asset
-   you can use (this is documented in `install-obsidian` and is not
-   hypothetical).
+   Match the upstream's asset layout:
+   - Obsidian: `releases?per_page=15` + `jq` filtering. Prefer this over
+     `releases/latest` for asset-bearing releases — `releases/latest` is
+     periodically a platform-specific release with no asset you can use (this
+     is documented in `install-obsidian` and is not hypothetical).
+   - Pyprland: `releases/latest` with a pinned fallback tag (`3.4.4`) when the
+     API is unreachable or rate-limited, because the release carries no assets
+     to filter on.
 
-3. **Verify integrity.** GitHub's asset JSON carries a `digest` field; use it:
+3. **Verify integrity — or say why you cannot.** GitHub's asset JSON carries a
+   `digest` field for Obsidian's AppImage; `install-brew-bundle` pairs release
+   assets with their published `.sha256` files. Use whichever upstream
+   publishes:
 
    ```bash
    expected="${APPIMAGE_DIGEST#sha256:}"
@@ -581,8 +633,8 @@ precedents).
    ```
 
    If upstream publishes no checksum at all, say so in a comment naming the
-   accepted risk and the upstream position — the `install-zotero` header is the
-   model. Do not silently skip verification.
+   accepted risk and the upstream position — the `install-pyprland` and
+   `install-zotero` headers are the model. Do not silently skip verification.
 
 4. **Install to `/usr/lib/<app>` and symlink into `/usr/bin`.** Never `/opt`,
    never `/usr/local` — both are `/var`-backed symlinks on bootc and will not
@@ -596,7 +648,8 @@ precedents).
 
 6. **Disable the app's self-updater.** The image is immutable; an in-app updater
    writing to `/usr` will fail confusingly. See Zotero's
-   `distribution/policies.json` with `DisableAppUpdate`.
+   `distribution/policies.json` with `DisableAppUpdate` (gated by
+   `built-apps-verify`).
 
 7. `trap 'rm -rf "${TMP}"' EXIT` on a `mktemp -d`, `::group::` per phase, and a
    gate in `built-apps-verify` for the binary, the desktop entry and the
@@ -618,9 +671,9 @@ the `final-verify` package census. Its only regression protection is the
 
 `system_files/shared/` is `COPY`'d to `/` **before any RPM is installed**. Any
 RPM installed in a later stage that owns the same path silently overwrites your
-file, and no gate will notice unless you write one. This is a live risk: Fedora
-restructured the `nix` package's `tmpfiles.d` layout in late 2025, and
-`install-nix` runs at stage 7 — long after the `COPY`.
+file, and no gate will notice unless you write one. This is a live risk: the
+`nix` package's `tmpfiles.d` layout changed upstream, and `install-nix` runs at
+Stage 08 — long after the `COPY`.
 
 ### Steps
 
@@ -661,12 +714,14 @@ restructured the `nix` package's `tmpfiles.d` layout in late 2025, and
    shells via `etc/profile.d/image-path.sh`.
 
 5. **`profile.d` ordering** is `00-path-guard.sh` → `01-nix-resolve-home-env.sh`
-   → `02-custom-environment.sh` → `image-path.sh` → `texlive.sh` (generated). A
-   new script must pick a prefix that puts it after anything it depends on.
-   `00-path-guard.sh` uses only shell builtins on purpose — never add an
-   external command to it, or a broken `PATH` becomes unrecoverable. The default
-   login shell is **zsh**, so confirm zsh's `/etc/zprofile` actually sources
-   what you rely on.
+   → `02-custom-environment.sh` → `brew.sh` → `image-path.sh` → `texlive.sh`
+   (generated by `install-texlive`). A new script must pick a prefix that puts
+   it after anything it depends on. `00-path-guard.sh` uses only shell builtins
+   on purpose — never add an external command to it, or a broken `PATH` becomes
+   unrecoverable. `brew.sh` only affects interactive shells (`$- == *i*`); the
+   `HOMEBREW_*` env for all sessions comes from
+   `etc/environment.d/10-homebrew.conf`. The default login shell is **zsh**, so
+   confirm zsh's `/etc/zprofile` actually sources what you rely on.
 
 6. **Never add anything under `var/`.** See
    [`ship-systemd-unit`](#skill-ship-systemd-unit).
@@ -679,7 +734,7 @@ restructured the `nix` package's `tmpfiles.d` layout in late 2025, and
 
 ### Why removals run first
 
-`remove-packages` is Stage 1, against the pristine base. `dnf` computes the
+`remove-packages` is Stage 02, against the pristine base. `dnf` computes the
 removal set from the full `Requires` graph, and on the untouched base the blast
 radius is smallest; any cascade that takes out core tooling fails the very next
 `dnf5` call, loudly and immediately. Do not move removals later to "clean up"
@@ -687,12 +742,13 @@ after installs.
 
 ### Steps
 
-1. Add the package to `REMOVAL_CANDIDATES` in `remove-packages`. The loop
-   already guards each name with `rpm -q`, so listing something absent is
-   harmless — `dnf5` would otherwise abort the whole transaction on one missing
-   argument.
+1. Add the package to the **`all.exclude.all` array in `packages.json`** —
+   `remove-packages` reads that list via `packages_excludes()` and resolves it
+   through `rpm -qa` first, so listing something absent is harmless (`dnf5`
+   would otherwise abort the whole transaction on one missing argument).
 2. If removing it could break something else, use the **reverse-dependency
-   gate** pattern rather than removing blind:
+   gate** pattern rather than removing blind (this lives in `remove-packages`
+   for `sddm`/`cage`):
 
    ```bash
    reqs="$(dnf5 repoquery --installed --whatrequires "$p" 2>/dev/null | grep -Ev "^${p}(-[0-9])?" || true)"
@@ -700,14 +756,12 @@ after installs.
    ```
 
 3. If the package **must not survive**, add it to the hard-fail loop in
-   `remove-packages` ("hard-fail verification"), not just the candidate list.
-4. **Check nothing reinstalls it later.** Grep the whole `build_files/` tree for
-   the name before committing:
-
-   ```bash
-   grep -rn '\b<pkg>\b' build_files/
-   ```
-
+   `remove-packages` ("hard-fail verification", along with `gnome-shell gdm
+   mutter nautilus firefox waydroid inputplumber`), not just the exclude list.
+4. **Check nothing reinstalls it later.** Grep the whole `build_files/` tree
+   and `packages.json` for the name before committing. A package in both
+   `all.exclude.all` and an include group (`fastfetch` today) is a tolerated
+   remove-then-reinstall pair — say why in a comment.
 5. For file-level removal of something no RPM owns, write the removal inline in
    the stage that creates the condition — there is no longer a general-purpose
    file-footprint script to extend.
@@ -741,7 +795,7 @@ old scripts.
 
    | Signature | Cause | Action |
    | --- | --- | --- |
-   | `504` / repodata timeouts | Copr CDN | re-run; ensure the COPR is in the CI `URLS` wait loop; the `libdnf5.conf.d` retry drop-in only helps if it is actually installed into `/etc/dnf/libdnf5.conf.d/` |
+   | `504` / repodata timeouts | Copr CDN | re-run; ensure the COPR is in the CI `URLS` wait loop; the `libdnf5.conf.d` retry drop-in only helps if it is actually installed into `/etc/dnf/libdnf5.conf.d/` (Stage 00) |
    | `no match for argument` | package renamed/moved repo | [`verify-package-availability`](#skill-verify-package-availability) |
    | `Conflicts` naming `dkms-nvidia` | an NVIDIA subpackage was added to a `dnf5 install` | it must be `rpm2cpio`-extracted instead — see `install-kernel`'s header |
    | `FAIL` in `*-verify` but the stage logged OK | usually the **gate** is wrong, not the stage | [`add-verify-gate`](#skill-add-verify-gate) |
@@ -758,10 +812,15 @@ old scripts.
 3. **Reproduce locally from the last good layer.** `podman build` defaults to
    `--layers=true`, so every successful step leaves an intermediate image; copy
    the id printed just before the failing `STEP`, then re-mount the context by
-   hand (the bind mount is not part of the image):
+   hand (the bind mount is not part of the image — and note the ctx root also
+   carries `packages.json` and `cosign.pub`):
 
    ```bash
-   podman run --rm -it -v "$PWD/build_files:/ctx:ro,Z" <intermediate-id> /bin/bash
+   podman run --rm -it \
+     -v "$PWD/build_files:/ctx:ro,Z" \
+     -v "$PWD/packages.json:/ctx/packages.json:ro,Z" \
+     -v "$PWD/cosign.pub:/ctx/cosign.pub:ro,Z" \
+     <intermediate-id> /bin/bash
    # then, inside:
    /ctx/install-foo ; echo "rc=$?"
    ```
@@ -825,10 +884,12 @@ old scripts.
    and flows into both `generate-build-tags` and the `IMAGE_VERSION` build
    arg. Change `FEDORA_VERSION` in `halcyon.env`.
 6. `install-terra` picks up `terra${FEDORA_MAJOR}` from `rpm -E %fedora` inside
-   the build and needs no edit.
+   the build and needs no edit (same for the RPM Fusion and negativo17 repo
+   URLs in `setup-repos`).
 7. Re-run [`verify-package-availability`](#skill-verify-package-availability)
    over every list: `install-packages`, `install-devtools`, `install-terra`.
-   Expect two or three renames per release.
+   Expect two or three renames per release (gamescope/mangohud moved from Terra
+   to Fedora on F44; lazygit ships under its Go name in Terra).
 8. Expect `remove-packages` to drift — packages get split, renamed, or dropped
    upstream. The `rpm -q` guard makes stale names harmless, but newly-split
    subpackages will survive removal unless you add them.
@@ -841,7 +902,7 @@ old scripts.
 
 **Use when:** changing `kernel-p03`, `kernel-p03-nvidia-open`, or the negativo17
 userland. **This is the highest-risk change in the repo.** Read
-`build_files/install-kernel`'s header comment in full first.
+`build_files/kernel/install-kernel`'s header comment in full first.
 
 ### The invariant
 
@@ -887,13 +948,12 @@ screen with no module loaded.
    # compare against rpm -qf for each path in the built image
    ```
 
-4. Keep `--setopt=tsflags=noscripts` and the explicit `depmod`; scriptlets fail
-   in a container.
+4. Keep `--setopt=tsflags=noscripts` and the explicit `depmod`/`dracut`;
+   scriptlets fail in a container.
 5. Confirm the new kernel still carries `CONFIG_SECURITY_SELINUX=y` — the
-   in-stage check already does this and the build must keep it, because halcyon
-   runs enforcing.
-6. `build-initramfs` must run after every change here; it is Stage 13 for this
-   reason.
+   `final-verify` gate checks it, because halcyon runs enforcing.
+6. `build-initramfs` must run after every change here; it is Stage 14 for this
+   reason (last, so the plymouth theme and NVIDIA dracut hooks are baked in).
 7. Re-run the whole `final-verify` NVIDIA group and boot-test in a VM before
    pushing a tag. A regression here is not recoverable from the desktop.
 
@@ -914,16 +974,18 @@ change, not a patch.
    default; containers/image (podman, skopeo, bootc) only reads the legacy
    `sha256-<digest>.sig` tag. `cosign verify` accepts BOTH, so it cannot detect
    the regression. Keep `--new-bundle-format=false --use-signing-config=false
---registry-referrers-mode=legacy` on `cosign sign`, keep the
+   --registry-referrers-mode=legacy` on `cosign sign`, keep the
    `--new-bundle-format=false` verify step, and keep `cosign-release` pinned
-   (Cosign 4 is expected to remove these flags).
+   (Cosign 4 is expected to remove these flags). `verify-github.sh` fails the
+   audit if either step is dropped.
 2. **Runners.** Pin `ubuntu-24.04`. `ubuntu-latest` migrates to 26.04 between
    2026-10-19 and 2026-11-19. To move: switch one workflow to `ubuntu-26.04`, and
    bump `ublue-os/remove-unwanted-software` past v9 (there is no v10 tag; use the
    commit `ublue-os/image-template` pins).
 3. **Publishing.** Only `PUBLISH_BRANCH` (`container`) pushes. Scheduled and
    dispatch runs execute from the repository default branch — if that is not
-   `container`, the daily rebuild never runs this workflow.
+   `container` (it is `main` locally until changed), the daily rebuild never
+   runs this workflow.
 4. **Actions.** Pin to a `vN` tag or a full SHA, never a branch. Renovate
    rewrites tags to SHAs; `verify-github.sh` accepts both.
 5. Run `just check-github` after any workflow edit.
@@ -969,9 +1031,8 @@ skill directory.
 
 - **`/SKILLS.md`** — repository root, beside `AGENTS.md` and `README.md`.
 - The pointer from `AGENTS.md` §1 is in place: *"Task-level procedures live in
-  `SKILLS.md`."* `.containerignore` excludes this file from the build context.
-- Add `AGENTS.md` and `SKILLS.md` to `.containerignore`. It already excludes
-  `README.md`, `MIGRATION.md` and `TODO.md`; without these two entries they are
-  uploaded into every build context for no reason.
+  `SKILLS.md`."* `.containerignore` already excludes `AGENTS.md`, `SKILLS.md`,
+  `MIGRATION.md` (retired — referenced by build comments but not present at the
+  root), `TODO.md`, `README.md`, `notes/` and `verify/` from the build context.
 - Do **not** place this under `build_files/` (it would be copied into the `ctx`
   stage) or `system_files/shared/` (it would ship inside the image at `/`).

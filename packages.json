@@ -1,8 +1,9 @@
 {
   "_docs": {
-    "purpose": "Single source of truth for every dnf-managed package in the image (ublue-os/main packages.json style, adapted to halcyon's per-use repo policy).",
+    "purpose": "Single source of truth for every dnf-managed package in the image",
     "how-to-add": "Add the package name to the group whose REPO WINDOW it resolves in — not the group whose subject matter it fits. The stage that consumes that group handles repo enable/disable and flags. Groups map 1:1 to build stage scripts (see build_files/packages-lib).",
     "groups": {
+      // TODO: Rename fedora-core to core
       "fedora-core": "Desktop/base packages from Fedora repos (install-packages). The @custom-environment comps group stays hardcoded in install-packages (comps groups are not catalog entries).",
       "fedora-hardware": "Firmware/microcode/audio/32-bit-GL support (install-packages).",
       "fedora-editors": "Editors and language runtimes from Fedora (install-packages). Split out of vendor-apps, which they were never resolved from — they only worked because they installed inside the vscode/brave repo window.",
@@ -11,7 +12,10 @@
       "bazaar-copr": "Resolved from COPR ublue-os/packages (install-packages).",
       "zen-copr": "Resolved from COPR sneexy/zen-browser (install-packages).",
       "vendor-apps": "Resolved from the per-use vendor repos written inside install-packages (vscode, brave) — NOTHING ELSE belongs here.",
+      // TODO: vendor-apps-optional should not exit
+      // TODO: move brave-origin to vendor-apps
       "vendor-apps-optional": "Installed with skip-unavailable semantics (may be absent from the vendor repo).",
+      // TODO: Rename fedora-devtools to cli-tools
       "fedora-devtools": "Former brew formulas available in Fedora (install-devtools).",
       "nix": "Winter-pattern nix packages (install-nix).",
       "flatpak": "The flatpak stack itself (setup-flatpaks); libnotify covers notify-send.",
@@ -24,6 +28,18 @@
   },
   "all": {
     "include": {
+      // TODO: This should be installed first
+      "programming": [
+        "python3",
+        "nodejs22",
+        "nodejs22-npm",
+        "perl",
+        "gcc-c++",
+        "cargo",
+        "cmake",
+        "go"
+      ],
+      // TODO: Rename fedora-core to core
       "fedora-core": [
         "accountsservice",
         "adw-gtk3-theme",
@@ -32,12 +48,11 @@
         "bluez-libs",
         "bluez-tools",
         "brightnessctl",
-        "cargo",
-        "cmake",
         "cronie",
         "curl",
         "ddcutil",
         "distrobox",
+        "libnotify",
         "ethtool",
         "fail2ban",
         "fastfetch",
@@ -45,10 +60,8 @@
         "flatseal",
         "fontconfig",
         "fonts-filesystem",
-        "gcc-c++",
         "git",
         "gnupg2",
-        "go",
         "grim",
         "gsettings-desktop-schemas",
         "gtk4-layer-shell",
@@ -105,11 +118,10 @@
         "zstd",
         "zsh"
       ],
+      // TODO: Rename fedora-hardware to hardware
       "fedora-hardware": [
         "linux-firmware",
         "microcode_ctl",
-        "amd-ucode-firmware",
-        "amd-gpu-firmware",
         "intel-gpu-firmware",
         "nvidia-gpu-firmware",
         "atheros-firmware",
@@ -136,26 +148,22 @@
         "mesa-libEGL.i686",
         "mesa-libGL.i686"
       ],
-      "fedora-editors": [
-        "emacs-pgtk",
-        "neovim",
-        "nodejs24",
-        "nodejs24-npm",
-        "tree-sitter-cli"
-      ],
+      // TODO: rename fedora-editors to editors
+      "fedora-editors": ["emacs-pgtk", "neovim", "tree-sitter-cli"],
+      // TODO: Rename hyprland-copr to desktop
       "hyprland-copr": [
         "cliphist",
         "greetd",
         "gnome-keyring",
         "gnome-tweaks",
-        "hyprland-git",
+        "hyprland",
         "hyprland-guiutils",
         "hyprpwcenter",
         "hyprshutdown",
         "kitty",
         "kitty-shell-integration",
         "kitty-terminfo",
-        "noctalia-git",
+        "noctalia",
         "noctalia-greeter-git",
         "nwg-look",
         "papers",
@@ -167,6 +175,7 @@
         "thunar-vcs-plugin",
         "thunar-volman",
         "xdg-desktop-portal-gtk",
+        "wl-clipboard",
         "xdg-desktop-portal-hyprland"
       ],
       "gaming": [
@@ -183,11 +192,19 @@
         "ydotool",
         "zenity"
       ],
-      "bazaar-copr": ["bazaar"],
-      "zen-copr": ["zen-browser"],
-      "vendor-apps": ["code", "brave-browser"],
-      "vendor-apps-optional": ["brave-origin"],
-      "fedora-devtools": [
+      // TODO: Rename bazaar-copr to ublueos-packages
+      "ublueos-packages": [
+        "bazaar",
+        "ublue-os-just",
+        "ublue-os-luks",
+        "ublue-os-selinux-workarounds",
+        "ublue-os-signing",
+        "ublue-recipes",
+        "uupd"
+      ],
+      // TODO: Install zen-browser from terra repo
+      "vendor-apps": ["code", "brave-browser", "brave-origin"],
+      "cli-tools": [
         "atuin",
         "bat",
         "btop",
@@ -200,22 +217,20 @@
         "fd-find",
         "fpaste",
         "fzf",
-        "wl-clipboard",
-        "gnuplot",
-        "jq",
-        "pandoc-cli",
-        "python3",
-        "perl",
         "ripgrep",
-        "tealdeer",
-        "uv"
+        "jq"
       ],
+      // TODO: rename fedora-devtools to devtools
+      "devtools": ["gnuplot", "pandoc-cli", "uv"],
+      "misc": ["tealdeer"],
       "nix": ["nix", "nix-daemon"],
-      "flatpak": ["flatpak", "flatpak-selinux", "libnotify"],
-      "ujust-copr": ["uupd", "ublue-os-just", "ublue-os-update-services"],
+      "flatpak": ["flatpak"],
+      // TODO: Answer why the folllowing ujust-fedora packages are being installed
       "ujust-fedora": ["glow", "grubby", "stress-ng"],
       "terra": [
+        "bazzite-portal",
         "zed",
+        "zen-browser",
         "scx-scheds",
         "scx-tools",
         "umu-launcher",
