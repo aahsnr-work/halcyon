@@ -13,8 +13,8 @@
 #     nvidia-kmod → akmod-nvidia).
 #   - negativo17 fedora-nvidia (NVIDIA userland matching the p03 modules).
 #
-# COPRs and vendor repos (lionheartp, sneexy, ublue-os/packages, catpieleaf,
-# terra, vscode, brave) are handled per-use in their own stages.
+# COPRs and vendor repos (lionheartp, ublue-os/packages, catpieleaf, terra,
+# vscode, brave) are handled per-use in their own stages.
 #
 # jq is installed HERE because packages-lib (sourced from Stage 02 onward)
 # parses packages.json with it. The base image happens to ship jq today; this

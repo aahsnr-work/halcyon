@@ -102,7 +102,7 @@ if grep -q 'id-token:[[:space:]]*write' "${B}"; then
 else
   pass "no unnecessary id-token permission"
 fi
-for copr in "catpieleaf/kernel-p03" "lionheartp/Hyprland" "ublue-os/packages" "sneexy/zen-browser"; do
+for copr in "catpieleaf/kernel-p03" "lionheartp/Hyprland" "ublue-os/packages"; do
   grep -q "${copr}" "${B}" && pass "monitors ${copr}" || failf "missing COPR monitor for ${copr}"
 done
 echo "::endgroup::"

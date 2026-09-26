@@ -60,9 +60,9 @@ Boot → greetd/noctalia-greeter → Hyprland → Noctalia first-run wizard.
   wiring), `gamescope`, `mangohud` (+i686), `gamemode`, `lutris`,
   `scx-scheds`/`scx-tools`, `umu-launcher`, `bazaar`, `bazzite-portal`,
   `input-remapper`, `usbip`, 32-bit NVIDIA + mesa libraries.
-- **Apps:** VS Code, Brave, zen-browser (per-use vendor/COPR repos — removed
-  again at finalize), zed, emacs-pgtk, neovim; Obsidian, Zotero, Pyprland,
-  TeX Live and a Python helper family baked at build time.
+- **Apps:** VS Code, Brave, zen-browser (from Terra; per-use vendor/COPR repo
+  files are removed again at finalize), zed, emacs-pgtk, neovim; Obsidian,
+  Zotero, Pyprland, TeX Live and a Python helper family baked at build time.
 - **Tooling:** the former brew formulas as RPMs (bat, eza, fzf, lazygit,
   ripgrep, starship, yazi, zellij, …) **plus a small baked Homebrew payload**
   — only `bun`, `pixi` and `opencode`, the formulas Fedora and Terra do not
@@ -124,23 +124,23 @@ malformed.
 
 Groups are keyed by **the repo a package resolves from**, not by what it does.
 
-| Group                                  | Resolved from                                                 | Consumed by      |
-| -------------------------------------- | ------------------------------------------------------------- | ---------------- |
-| `fedora-core`                          | Fedora                                                        | install-packages |
-| `fedora-hardware`                      | Fedora                                                        | install-packages |
-| `fedora-editors`                       | Fedora                                                        | install-packages |
-| `hyprland-copr`                        | COPR `lionheartp/Hyprland`                                    | install-packages |
-| `gaming`                               | Fedora + RPM Fusion                                           | install-packages |
-| `bazaar-copr`                          | COPR `ublue-os/packages`                                      | install-packages |
-| `zen-copr`                             | COPR `sneexy/zen-browser`                                     | install-packages |
-| `vendor-apps` / `vendor-apps-optional` | per-use vendor repos (VS Code, Brave)                         | install-packages |
-| `fedora-devtools`                      | Fedora                                                        | install-devtools |
-| `nix`                                  | Fedora                                                        | install-nix      |
-| `flatpak`                              | Fedora                                                        | setup-flatpaks   |
-| `ujust-copr` / `ujust-fedora`          | COPR `ublue-os/packages` / Fedora                             | setup-ujust      |
-| `terra`                                | **Terra only** (`--disablerepo='*'`)                          | install-terra    |
-| `all.exclude.all`                      | removals — resolved through `rpm -qa`, absent names tolerated | remove-packages  |
-| `flatpak.install` / `flatpak.remove`   | Flathub (user repo, at first login)                           | setup-flatpaks   |
+| Group                                  | Resolved from                                                 | Consumed by       |
+| -------------------------------------- | ------------------------------------------------------------- | ----------------- |
+| `programming`                          | Fedora                                                        | install-packages (FIRST) |
+| `core`                                 | Fedora                                                        | install-packages  |
+| `hardware`                             | Fedora                                                        | install-packages  |
+| `editors`                              | Fedora                                                        | install-packages  |
+| `desktop`                              | COPR `lionheartp/Hyprland`                                    | install-packages  |
+| `gaming`                               | Fedora + RPM Fusion                                           | install-packages  |
+| `ublueos-packages`                     | COPR `ublue-os/packages`                                      | install-packages  |
+| `vendor-apps`                          | per-use vendor repos (VS Code, Brave)                         | install-packages  |
+| `cli-tools` / `devtools` / `misc`      | Fedora                                                        | install-devtools  |
+| `nix`                                  | Fedora                                                        | install-nix       |
+| `flatpak`                              | Fedora                                                        | setup-flatpaks    |
+| `ujust-fedora`                         | Fedora                                                        | setup-ujust       |
+| `terra`                                | **Terra only** (`--disablerepo='*'`)                          | install-terra     |
+| `all.exclude.all`                      | removals — resolved through `rpm -qa`, absent names tolerated | remove-packages   |
+| `flatpak.install` / `flatpak.remove`   | Flathub (user repo, at first login)                           | setup-flatpaks    |
 
 **To add a package:** put its name in the group matching the repo it resolves
 from, then rebuild (`just build localhost/halcyon latest`). Only if a brand-new

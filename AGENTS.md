@@ -48,7 +48,6 @@ packages.json              # single source of truth for every dnf/flatpak packag
 cosign.pub                 # public signing key — COPY'd into ctx, installed by image-info
 .containerignore           # keeps docs/notes/verify/.github out of the build context
 README.md                  # user-facing readme
-pkg-sources.md             # where each class of package comes from (design doc)
 TODO.md                    # task checklist (design doc)
 notes/                     # ad-hoc helper scripts (gpg-sign.sh); never shipped
 
@@ -84,7 +83,8 @@ catalog is read from `/ctx/packages.json`.
 ## 3. Commands
 
 ```bash
-just check          # just --fmt --check, bash -n over build_files + verify + .just recipe bodies
+just check          # just --fmt --check, bash -n over build_files + verify + .just recipe bodies,
+                    #   packages.json validity + group-consumer consistency
 just lint           # shellcheck --shell=bash -x over every build_files script
 just lint-python    # ruff (E9 + F821/F822/F823) over the python helpers
 just test-python    # pytest suites for the python helpers that have them (dump-to-markdown, rmi)
@@ -207,8 +207,10 @@ script costs a full ~40-minute CI build.
   `just lint` runs), not the script's directory. Do not rewrite these to
   `../packages-lib`; that fails `just lint`.
 - If a script tolerates failure (`|| true`), the corresponding verify gate must
-  tolerate it too. The tolerated installs today are the `custom-environment`
-  comps group and `vendor-apps-optional` (brave-origin); neither is hard-gated.
+  tolerate it too. The only tolerated install today is the `custom-environment`
+  comps group, which is not hard-gated. (brave-origin used to install with
+  skip-unavailable semantics via `vendor-apps-optional`; that group is gone and
+  brave-origin is a hard `vendor-apps` member gated by `packages-verify`.)
 - The `/ctx` bind mount is **read-only**. Stages that must write into their own
   sources copy them out first — `install-built-apps` copies
   `/ctx/python-packages` to `/usr/src/python-packages` precisely because pip's
@@ -313,9 +315,10 @@ shipped in `rmi`. `just lint-python` (ruff F821 undefined names) and
   `amannn/action-semantic-pull-request`).
 - `build.yml`: publish gate → COPR metadata wait → both syntax gates →
   `just build` → `verify/` suite → census → tags → (publish branch only) push,
-  sign (legacy format), verify. Monitors the four COPRs the build consumes:
-  `catpieleaf/kernel-p03`, `lionheartp/Hyprland`, `ublue-os/packages`,
-  `sneexy/zen-browser`.
+  sign (legacy format), verify. Monitors the three COPRs the build consumes:
+  `catpieleaf/kernel-p03`, `lionheartp/Hyprland`, `ublue-os/packages`.
+  (The `sneexy/zen-browser` COPR was retired — zen-browser resolves from
+  Terra now.)
 - `clean.yml`: weekly GHCR pruning (Sundays 00:15 UTC).
 
 If you add a COPR the build consumes, add its `repomd.xml` URL to the `URLS`

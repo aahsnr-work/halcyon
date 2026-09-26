@@ -1,34 +1,29 @@
 {
   "_docs": {
     "purpose": "Single source of truth for every dnf-managed package in the image",
-    "how-to-add": "Add the package name to the group whose REPO WINDOW it resolves in — not the group whose subject matter it fits. The stage that consumes that group handles repo enable/disable and flags. Groups map 1:1 to build stage scripts (see build_files/packages-lib).",
+    "how-to-add": "Add the package name to the group whose REPO WINDOW it resolves in — not the group whose subject matter it fits. The stage that consumes that group handles repo enable/disable and flags. Groups map 1:1 to build stage scripts (see build_files/packages-lib). This file must stay PLAIN JSON: packages-lib reads it with jq, which rejects comments — record verified names and repo provenance in the group's entry below, never as inline comments.",
     "groups": {
-      // TODO: Rename fedora-core to core
-      "fedora-core": "Desktop/base packages from Fedora repos (install-packages). The @custom-environment comps group stays hardcoded in install-packages (comps groups are not catalog entries).",
-      "fedora-hardware": "Firmware/microcode/audio/32-bit-GL support (install-packages).",
-      "fedora-editors": "Editors and language runtimes from Fedora (install-packages). Split out of vendor-apps, which they were never resolved from — they only worked because they installed inside the vscode/brave repo window.",
-      "hyprland-copr": "Resolved from COPR lionheartp/Hyprland (install-packages). Weak deps are OFF — list every stack weak dep explicitly.",
+      "programming": "Language toolchains from Fedora — python3, nodejs, gcc-c++, cargo, cmake, golang, perl. Installed FIRST by install-packages, before every other group, so later groups and stages can rely on the toolchains (gcc backs brew formula postinstalls; python3 backs the pip/pipx stages). NOTE: the Go toolchain package is golang — no package named just go exists on Fedora 44 (verified 2026-09-26).",
+      "core": "Desktop/base packages from Fedora repos (install-packages). The @custom-environment comps group stays hardcoded in install-packages (comps groups are not catalog entries).",
+      "hardware": "Firmware/microcode/audio/32-bit-GL support (install-packages).",
+      "editors": "Editors and language runtimes from Fedora (install-packages). Split out of vendor-apps, which they were never resolved from — they only worked because they installed inside the vscode/brave repo window.",
+      "desktop": "Hyprland desktop stack, resolved from COPR lionheartp/Hyprland (install-packages). Weak deps are OFF — list every stack weak dep explicitly.",
       "gaming": "RPM Fusion + Fedora gaming packages (install-packages).",
-      "bazaar-copr": "Resolved from COPR ublue-os/packages (install-packages).",
-      "zen-copr": "Resolved from COPR sneexy/zen-browser (install-packages).",
-      "vendor-apps": "Resolved from the per-use vendor repos written inside install-packages (vscode, brave) — NOTHING ELSE belongs here.",
-      // TODO: vendor-apps-optional should not exit
-      // TODO: move brave-origin to vendor-apps
-      "vendor-apps-optional": "Installed with skip-unavailable semantics (may be absent from the vendor repo).",
-      // TODO: Rename fedora-devtools to cli-tools
-      "fedora-devtools": "Former brew formulas available in Fedora (install-devtools).",
+      "ublueos-packages": "Everything resolved from COPR ublue-os/packages (install-packages): bazaar plus the ublue-os-just/uupd machinery. Absorbs the former bazaar-copr and ujust-copr groups — setup-ujust no longer installs from this COPR, it only consumes ujust-fedora.",
+      "vendor-apps": "Resolved from the per-use vendor repos written inside install-packages (vscode, brave) — NOTHING ELSE belongs here. brave-origin is a hard member since the vendor-apps-optional skip-unavailable path was removed.",
+      "cli-tools": "Former brew formulas — CLI user tools from Fedora (install-devtools).",
+      "devtools": "Former brew formulas available in Fedora (install-devtools).",
+      "misc": "Packages that fit no other group (install-devtools).",
       "nix": "Winter-pattern nix packages (install-nix).",
-      "flatpak": "The flatpak stack itself (setup-flatpaks); libnotify covers notify-send.",
-      "ujust-copr": "ublue-os-just machinery + uupd from COPR ublue-os/packages (setup-ujust).",
-      "ujust-fedora": "Fedora companions of the ujust tooling (setup-ujust). grubby backs the kernel-arg recipes (and hard-requires grub2-tools). ugum falls back to fzf when gum is absent, so gum is NOT required. NOTE: the wget BINARY on F44 comes from wget2-wget (verified 2026-09-20 — no package named just wget exists on Fedora 44).",
-      "terra": "Resolved EXCLUSIVELY from Terra repos (install-terra uses --disablerepo='*'). terra-release/-mesa/-multimedia are repo bootstrap and stay hardcoded there.",
+      "flatpak": "The flatpak stack itself (setup-flatpaks). flatpak-selinux is listed explicitly because install_weak_deps=False — flatpaks-verify gates it. libnotify (notify-send) lives in core.",
+      "ujust-fedora": "Fedora companions of the ujust tooling (setup-ujust). grubby backs the kernel-arg recipes (and hard-requires grub2-tools). stress-ng powers the 'ujust benchmark' recipe (80-halcyon.just runs stress-ng --matrix). glow is a deliberate user-facing terminal markdown renderer — no recipe consumes it today, so nothing gates it. ugum falls back to fzf when gum is absent, so gum is NOT required. NOTE: the wget BINARY on F44 comes from wget2-wget (verified 2026-09-20 — no package named just wget exists on Fedora 44).",
+      "terra": "Resolved EXCLUSIVELY from Terra repos (install-terra uses --disablerepo='*'). terra-release/-mesa/-multimedia are repo bootstrap and stay hardcoded there. zen-browser moved here from the retired sneexy/zen-browser COPR (2026-09).",
       "exclude-all": "The 'exclude' block drives remove-packages (Stage 2); entries are resolved through rpm -qa first, so absent names are tolerated."
     },
-    "build-tool-dependencies": "zstd, util-linux-core (setpriv), gcc-c++, git, curl and jq are hard preconditions of install-brew-bundle; gnupg2 is a hard precondition of install-texlive's signature verification. They are in fedora-core deliberately and gated by packages-verify — do not remove them as 'unused'."
+    "build-tool-dependencies": "zstd, util-linux-core (setpriv), git, curl and jq are hard preconditions of install-brew-bundle; gnupg2 is a hard precondition of install-texlive's signature verification. gcc-c++ (programming) provides the gcc binary brew formula postinstalls need. They are in core/programming deliberately and gated by packages-verify — do not remove them as 'unused'."
   },
   "all": {
     "include": {
-      // TODO: This should be installed first
       "programming": [
         "python3",
         "nodejs22",
@@ -37,10 +32,9 @@
         "gcc-c++",
         "cargo",
         "cmake",
-        "go"
+        "golang"
       ],
-      // TODO: Rename fedora-core to core
-      "fedora-core": [
+      "core": [
         "accountsservice",
         "adw-gtk3-theme",
         "bleachbit",
@@ -118,8 +112,7 @@
         "zstd",
         "zsh"
       ],
-      // TODO: Rename fedora-hardware to hardware
-      "fedora-hardware": [
+      "hardware": [
         "linux-firmware",
         "microcode_ctl",
         "intel-gpu-firmware",
@@ -148,10 +141,8 @@
         "mesa-libEGL.i686",
         "mesa-libGL.i686"
       ],
-      // TODO: rename fedora-editors to editors
-      "fedora-editors": ["emacs-pgtk", "neovim", "tree-sitter-cli"],
-      // TODO: Rename hyprland-copr to desktop
-      "hyprland-copr": [
+      "editors": ["emacs-pgtk", "neovim", "tree-sitter-cli"],
+      "desktop": [
         "cliphist",
         "greetd",
         "gnome-keyring",
@@ -192,7 +183,6 @@
         "ydotool",
         "zenity"
       ],
-      // TODO: Rename bazaar-copr to ublueos-packages
       "ublueos-packages": [
         "bazaar",
         "ublue-os-just",
@@ -202,7 +192,6 @@
         "ublue-recipes",
         "uupd"
       ],
-      // TODO: Install zen-browser from terra repo
       "vendor-apps": ["code", "brave-browser", "brave-origin"],
       "cli-tools": [
         "atuin",
@@ -217,15 +206,12 @@
         "fd-find",
         "fpaste",
         "fzf",
-        "ripgrep",
-        "jq"
+        "ripgrep"
       ],
-      // TODO: rename fedora-devtools to devtools
       "devtools": ["gnuplot", "pandoc-cli", "uv"],
       "misc": ["tealdeer"],
       "nix": ["nix", "nix-daemon"],
-      "flatpak": ["flatpak"],
-      // TODO: Answer why the folllowing ujust-fedora packages are being installed
+      "flatpak": ["flatpak", "flatpak-selinux"],
       "ujust-fedora": ["glow", "grubby", "stress-ng"],
       "terra": [
         "bazzite-portal",
@@ -235,7 +221,6 @@
         "scx-tools",
         "umu-launcher",
         "umu-wrapper",
-        "bazzite-portal",
         "bibata-cursor-theme",
         "jetbrainsmono-nerd-fonts",
         "nerdfontssymbolsonly-nerd-fonts",

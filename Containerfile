@@ -79,10 +79,10 @@ RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     echo "████ STAGE 03/17 · install-kernel · p03 + nvidia-open (Stage K1) ████" \
     && /ctx/kernel/install-kernel && /ctx/kernel/kernel-verify && /ctx/cleanup
 
-# ---- Stage 4: core + hardware + editors + desktop + gaming + apps ----------
+# ---- Stage 4: programming + core + hardware + editors + desktop + gaming + apps
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    echo "████ STAGE 04/17 · install-packages · core + desktop + gaming + apps ████" \
+    echo "████ STAGE 04/17 · install-packages · programming + core + desktop + gaming + apps ████" \
     && /ctx/packages/install-packages && /ctx/packages/packages-verify && /ctx/cleanup
 
 # ---- Stage 5: Terra packages (user-editable list, exclusive resolution) ----
@@ -121,10 +121,10 @@ RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     echo "████ STAGE 10/17 · install-built-apps · obsidian/zotero/pyprland/texlive/python ████" \
     && /ctx/apps/install-built-apps && /ctx/apps/built-apps-verify && /ctx/cleanup
 
-# ---- Stage 11: ujust machinery (ublue-os-just) + uupd -----------------------
+# ---- Stage 11: ujust-fedora companions + recipe module registration ---------
 RUN --mount=type=cache,id=dnf-cache,target=/var/cache/libdnf5 \
     --mount=type=bind,from=ctx,source=/,target=/ctx,ro \
-    echo "████ STAGE 11/17 · setup-ujust · ublue-os-just + uupd ████" \
+    echo "████ STAGE 11/17 · setup-ujust · ujust-fedora + module registration ████" \
     && /ctx/runtime/setup-ujust && /ctx/runtime/ujust-verify && /ctx/cleanup
 
 # ---- Stage 12: system config (services, tmpfiles, chezmoi + brew wiring) ----

@@ -1,25 +1,20 @@
 #!/usr/bin/env bash
-# halcyon build step — setup-ujust (ublue-os-just machinery + uupd)
+# halcyon build step — setup-ujust (register recipe modules + update timer)
 #
-# main inherited /usr/bin/ujust + /usr/share/ublue-os/just{,file} from the
-# Bazzite base; on fedora-bootc the same machinery is the `ublue-os-just` RPM
-# (COPR ublue-os/packages). `ujust update` then works through uupd exactly
-# like Bazzite's 10-update.just. The vendored bazzite/halcyon recipe modules
-# ship via the system_files/shared overlay (root COPY); this stage only
-# installs packages, registers imports, and wires the update timer.
+# The ublue-os-just machinery and uupd arrive via the ublueos-packages group
+# in install-packages (COPR ublue-os/packages — the only stage that consumes
+# that COPR); `ujust update` then works through uupd exactly like Bazzite's
+# 10-update.just. The vendored bazzite/halcyon recipe modules ship via the
+# system_files/shared overlay (root COPY); this stage installs the Fedora
+# companions, registers imports, and wires the update timer.
 set -euo pipefail
 # shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
-echo "::group::setup-ujust — ublue-os-just + uupd"
-dnf5 -y copr enable ublue-os/packages
-readarray -t UJUST_COPR_PKGS < <(packages_for ujust-copr)
-dnf5 -y --setopt=install_weak_deps=False install \
-  "${UJUST_COPR_PKGS[@]}"
+echo "::group::setup-ujust — ujust-fedora companions"
 readarray -t UJUST_FEDORA_PKGS < <(packages_for ujust-fedora)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${UJUST_FEDORA_PKGS[@]}"
-dnf5 -y copr disable ublue-os/packages
 
 # the machinery must exist — fail loudly if the package layout changed
 test -x /usr/bin/ujust || { echo "  FAIL  /usr/bin/ujust missing from ublue-os-just"; exit 1; }
@@ -50,7 +45,7 @@ sed -i 's@/usr/bin/bazzite-steam %U@/usr/bin/bazzite-steam -silent %U@g' /etc/sk
 # lutris: pyproto buffer fix from bazzite (net.lutris.Lutris.desktop)
 sed -i 's|^Exec=lutris %U$|Exec=env PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python lutris %U|' /usr/share/applications/net.lutris.Lutris.desktop 2>/dev/null || true
 
-# updater timer (from ublue-os-update-services)
+# updater timer (shipped by the uupd package itself, not ublue-os-update-services)
 systemctl enable uupd.timer 2>/dev/null || \
   ln -sf /usr/lib/systemd/system/uupd.timer /usr/lib/systemd/system/timers.target.wants/uupd.timer 2>/dev/null || true
 echo "  INFO  ujust recipes registered:"

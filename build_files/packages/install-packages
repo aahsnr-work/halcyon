@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# halcyon build step — install-packages (core + desktop + gaming + apps)
+# halcyon build step — install-packages (programming + core + desktop + gaming + apps)
 # Policy: --setopt=install_weak_deps=False on EVERY install; anything that
 # used to arrive as a weak dep must be listed explicitly (e.g. flatpak-selinux
 # in setup-flatpaks, hyprland-guiutils/xdg portals below).
@@ -9,6 +9,17 @@ set -euo pipefail
 # shellcheck source=build_files/packages-lib
 source /ctx/packages-lib
 packages_validate
+echo "::group::install-packages — programming toolchains (Fedora, first)"
+
+# --- language toolchains, installed before every other group: later stages
+# compile with gcc and run python3, and keeping them in their own first
+# transaction attributes a toolchain failure to the toolchain, not to whatever
+# group happens to follow it ---
+readarray -t PROG_PKGS < <(packages_for programming)
+dnf5 -y --setopt=install_weak_deps=False install \
+  "${PROG_PKGS[@]}"
+echo "::endgroup::"
+
 echo "::group::install-packages — core + hardware + editors (Fedora)"
 
 # --- core set (main core.yml parity; Fedora repos) ---
@@ -17,20 +28,20 @@ echo "::group::install-packages — core + hardware + editors (Fedora)"
 dnf5 -y --setopt=install_weak_deps=False group-install \
   custom-environment \
   || true
-readarray -t CORE_PKGS < <(packages_for fedora-core)
+readarray -t CORE_PKGS < <(packages_for core)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${CORE_PKGS[@]}"
 
 # --- hardware support the Bazzite base used to provide (fedora-bootc is
 # bare; rakuos-base installs the same classes explicitly) ---
-readarray -t HW_PKGS < <(packages_for fedora-hardware)
+readarray -t HW_PKGS < <(packages_for hardware)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${HW_PKGS[@]}"
 
 # --- editors + language runtimes (Fedora). These used to sit in vendor-apps
 # and install inside the vscode/brave repo window, which misdescribed where
 # they resolve from. Plain Fedora packages: no third-party repo needed.
-readarray -t EDITOR_PKGS < <(packages_for fedora-editors)
+readarray -t EDITOR_PKGS < <(packages_for editors)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${EDITOR_PKGS[@]}"
 echo "::endgroup::"
@@ -40,9 +51,9 @@ echo "::group::install-packages — desktop stack (COPR lionheartp/Hyprland)"
 # be listed in the group explicitly (hyprland-guiutils,
 # xdg-desktop-portal-{hyprland,gtk}, qt6ct, nwg-look, ...).
 dnf5 -y copr enable lionheartp/Hyprland
-readarray -t HYPRLAND_PKGS < <(packages_for hyprland-copr)
+readarray -t DESKTOP_PKGS < <(packages_for desktop)
 dnf5 -y --setopt=install_weak_deps=False install \
-  "${HYPRLAND_PKGS[@]}"
+  "${DESKTOP_PKGS[@]}"
 dnf5 -y copr disable lionheartp/Hyprland
 echo "::endgroup::"
 
@@ -55,22 +66,17 @@ dnf5 -y --setopt=install_weak_deps=False install \
   "${GAMING_PKGS[@]}"
 echo "::endgroup::"
 
-echo "::group::install-packages — bazaar (COPR ublue-os/packages)"
+echo "::group::install-packages — ublue machinery (COPR ublue-os/packages)"
+# bazaar + the ublue-os-just/uupd machinery. This is the ONLY stage that
+# consumes this COPR now — setup-ujust consumes ujust-fedora only.
 dnf5 -y copr enable ublue-os/packages
-readarray -t BAZAAR_PKGS < <(packages_for bazaar-copr)
+readarray -t UBLUE_PKGS < <(packages_for ublueos-packages)
 dnf5 -y --setopt=install_weak_deps=False install \
-  "${BAZAAR_PKGS[@]}"
+  "${UBLUE_PKGS[@]}"
 dnf5 -y copr disable ublue-os/packages
 echo "::endgroup::"
 
-echo "::group::install-packages — browsers + vendor repos (per-use)"
-# zen-browser (sneexy COPR per-use)
-dnf5 -y copr enable sneexy/zen-browser
-readarray -t ZEN_PKGS < <(packages_for zen-copr)
-dnf5 -y --setopt=install_weak_deps=False install \
-  "${ZEN_PKGS[@]}"
-dnf5 -y copr disable sneexy/zen-browser
-
+echo "::group::install-packages — vendor repos (per-use)"
 # vscode/brave vendor repos: written, used, disabled and deleted inside this
 # stage. Only packages that genuinely resolve from these repos belong in the
 # vendor-apps group.
@@ -97,12 +103,5 @@ REPO
 readarray -t VENDOR_PKGS < <(packages_for vendor-apps)
 dnf5 -y --setopt=install_weak_deps=False install \
   "${VENDOR_PKGS[@]}"
-# brave-origin: skip-unavailable semantics (may not exist in the vendor repo)
-readarray -t VENDOR_OPT_PKGS < <(packages_for vendor-apps-optional)
-if [ "${#VENDOR_OPT_PKGS[@]}" -gt 0 ]; then
-  dnf5 -y --setopt=install_weak_deps=False install \
-    "${VENDOR_OPT_PKGS[@]}" \
-    || true
-fi
 rm -f /etc/yum.repos.d/vscode.repo /etc/yum.repos.d/brave-browser.repo
 echo "::endgroup::"

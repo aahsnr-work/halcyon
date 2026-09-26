@@ -92,9 +92,11 @@ frequently differ (`dust` vs `du-dust`, `fd` vs `fd-find`, `ripgrep` provides
    dnf5 repoquery --file /usr/bin/<binary>
    ```
 
-5. Record the verified name **and the repo it came from** in a comment next to
-   the package in `packages.json` (the group's `_docs` entry), using the
-   existing style: `# NOTE: lazygit ships under its Go name in Terra`.
+5. Record the verified name **and the repo it came from** in the group's
+   `_docs` entry in `packages.json`. Never write the note as an inline
+   `//` or `#` comment — jq parses the file as plain JSON and rejects both
+   (an inline comment block once shipped and broke every stage from Stage 02
+   on; `just check` now catches it).
 
 ### Rules
 
@@ -102,10 +104,11 @@ frequently differ (`dust` vs `du-dust`, `fd` vs `fd-find`, `ripgrep` provides
   one the stage has enabled. Terra packages never fall back to Fedora — that is
   enforced by `--disablerepo='*' --enablerepo='terra*'` and it is deliberate.
 - If a package is genuinely optional, it gets `|| true` at install (the only
-  tolerated installs today are the `custom-environment` comps group and
-  `vendor-apps-optional`/brave-origin) **and** must not be a hard gate in any
-  `*-verify` script. A hard gate on a tolerated install is a red build waiting
-  to happen.
+  tolerated install today is the `custom-environment` comps group) **and**
+  must not be a hard gate in any `*-verify` script. A hard gate on a tolerated
+  install is a red build waiting to happen. (`vendor-apps-optional` used to be
+  the second tolerated install; that group was removed and brave-origin is now
+  a hard `vendor-apps` member gated by `packages-verify`.)
 - `install-terra` and `install-devtools` have no `-verify` companion — each
   `rpm -q`s every listed package inside the stage and fails on the first miss.
   A new package in those groups is verified by that inline loop plus
@@ -223,21 +226,21 @@ subsystem, a new class of software, a new configuration phase.
 
    | Source                           | Where                                    | How                                           |
    | -------------------------------- | ---------------------------------------- | --------------------------------------------- |
-   | Fedora (core/hardware)           | `packages.json` `fedora-core` / `fedora-hardware` | alphabetical in the group            |
-   | Fedora (editors/runtimes)        | `packages.json` `fedora-editors`         | alphabetical                                  |
-   | Fedora (CLI dev tooling)         | `packages.json` `fedora-devtools`        | alphabetical                                  |
+   | Fedora (toolchains)              | `packages.json` `programming`            | installed FIRST by `install-packages` (Stage 04) |
+   | Fedora (core/hardware)           | `packages.json` `core` / `hardware`      | alphabetical in the group                     |
+   | Fedora (editors/runtimes)        | `packages.json` `editors`                | alphabetical                                  |
+   | Fedora (CLI user tools)          | `packages.json` `cli-tools`              | alphabetical, `install-devtools` (Stage 06)   |
+   | Fedora (CLI dev tooling)         | `packages.json` `devtools` / `misc`      | alphabetical, `install-devtools` (Stage 06)   |
    | Fedora (ujust recipe dependency) | `packages.json` `ujust-fedora`           | and add a `command -v` gate to `ujust-verify` |
    | Terra                            | `packages.json` `terra`                  | resolves exclusively from Terra               |
-   | COPR lionheartp/Hyprland         | `packages.json` `hyprland-copr`          | consumed by `install-packages` (Stage 04)     |
-   | COPR ublue-os/packages (bazaar)  | `packages.json` `bazaar-copr`            | consumed by `install-packages` (Stage 04)     |
-   | COPR sneexy/zen-browser          | `packages.json` `zen-copr`               | consumed by `install-packages` (Stage 04)     |
-   | COPR ublue-os/packages (ujust)   | `packages.json` `ujust-copr`             | consumed by `setup-ujust` (Stage 11)          |
+   | COPR lionheartp/Hyprland         | `packages.json` `desktop`                | consumed by `install-packages` (Stage 04)     |
+   | COPR ublue-os/packages           | `packages.json` `ublueos-packages`       | consumed by `install-packages` (Stage 04)     |
    | Vendor repo (MS, Brave)          | `packages.json` `vendor-apps`            | ONLY if it truly resolves from that repo      |
-   | Vendor, may be absent            | `packages.json` `vendor-apps-optional`   | installed with `|| true` (skip-unavailable)   |
 
-   Note: `ublue-os/packages` is consumed by **two** stages (`install-packages`
-   for `bazaar-copr`, `setup-ujust` for `ujust-copr`); each stage does its own
-   `copr enable`/`copr disable`.
+   Note: `ublue-os/packages` is consumed by exactly **one** stage
+   (`install-packages` for `ublueos-packages`, which does its own
+   `copr enable`/`copr disable`). `setup-ujust` installs `ujust-fedora` only;
+   the ublue-os-just/uupd machinery arrives earlier via `ublueos-packages`.
 
 3. Always `--setopt=install_weak_deps=False`. If the package relied on a weak
    dependency, list that dependency explicitly too — this is why
@@ -274,7 +277,7 @@ subsystem, a new class of software, a new configuration phase.
    on that list and you are (re)installing it anyway, `remove-packages`
    resolves the list through `rpm -qa` first so a missing name is tolerated —
    but say in a comment why the pair exists. (`fastfetch` is currently in both
-   `fedora-core` and `all.exclude.all`; the exclusion only bites when the base
+   `core` and `all.exclude.all`; the exclusion only bites when the base
    ships it.) The old `guarded-removals` helper that used to warn about this is
    gone — do not resurrect it.
 
@@ -483,7 +486,7 @@ same symlinks and say where the file comes from at the wiring site.
    | `rpm-ostree` | not on bootc | use `grubby --update-kernel=ALL --args=/--remove-args=`, read `/proc/cmdline`, `bootc status` — but `halcyon-rebase.just` deliberately keeps a `command -v rpm-ostree` fallback so the rebase recipe works on non-bootc hosts; keep that pattern, do not copy it to new recipes |
    | `/usr/libexec/bazzite-boot-remount` | **vendored** at `system_files/shared/usr/libexec/bazzite-boot-remount` | `source /usr/libexec/bazzite-boot-remount` like `80-halcyon.just` does; keep the vendored copy in sync with upstream |
    | `ugum` | shipped by `ublue-os-just`; falls back to fzf when `gum` is absent (only fzf is gated) | `80-halcyon.just` uses `Choose` from `/usr/lib/ujust/ujust.sh`; `81-halcyon-fixes.just` still calls `ugum choose` directly — either is fine, be consistent within a module |
-   | `fpaste`, `wl-copy`, `zenity` | installed (fedora-devtools / gaming) and gated by `ujust-verify` with `command -v` | you can rely on them, but keep the gate |
+   | `fpaste`, `wl-copy`, `zenity` | installed (cli-tools / gaming) and gated by `ujust-verify` with `command -v` | you can rely on them, but keep the gate |
    | `kdialog`, `gum` | not installed | use `Choose`, or install the package first |
    | `/usr/share/ublue-os/image-info.json` | generated by `desktop/image-info` (Stage 13) | you can rely on it; `bazzite-steam`, `bazzite-steam-firstrun` and `83-halcyon-audio` already read it |
 
@@ -539,7 +542,7 @@ same symlinks and say where the file comes from at the wiring site.
    `/usr/lib/halcyon-python` with no dependency resolution safety net; a pip
    dependency would have to be vendored or the venv redesigned. Runtime *tool*
    dependencies (`fd`, `fzf`, `bat`, `rg`, `grim`, `swappy`, `slurp`) come
-   from the RPM layer (`fedora-devtools` / `fedora-core`) and are checked at
+   from the RPM layer (`cli-tools` / `core`) and are checked at
    startup:
 
    ```python
@@ -863,7 +866,7 @@ old scripts.
    bump is blocked, not merely risky:
 
    ```bash
-   for u in catpieleaf/kernel-p03 lionheartp/Hyprland sneexy/zen-browser ublue-os/packages; do
+   for u in catpieleaf/kernel-p03 lionheartp/Hyprland ublue-os/packages; do
      code=$(curl -sL -o /dev/null -w '%{http_code}' \
        "https://download.copr.fedorainfracloud.org/results/${u}/fedora-45-x86_64/repodata/repomd.xml")
      echo "${code}  ${u}"

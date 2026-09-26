@@ -35,6 +35,7 @@ gate "steam installed"                   rpm -q steam
 gate "bazzite-steam wrapper"             test -x /usr/bin/bazzite-steam
 gate "steam desktop -> bazzite-steam"    grep -q 'bazzite-steam' /usr/share/applications/steam.desktop
 gate "devtools (terra + fedora)"         sh -c "rpm -q zed starship yazi zellij golang-github-jesseduffield-lazygit bat eza fzf pandoc-cli chezmoi"
+gate "zen-browser (terra) installed"     rpm -q zen-browser
 echo "::endgroup::"
 
 echo "::group::final-verify — repo end state"

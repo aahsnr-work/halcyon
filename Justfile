@@ -31,6 +31,36 @@ check:
                ! -name "*.json" ! -name "README*")
     echo "::endgroup::"
 
+    echo "::group::packages.json — validity + group-consumer consistency"
+    # jq rejects comments and malformed JSON; packages_validate would only
+    # surface that at Stage 02 of a ~40-minute build. Catch it here, and catch
+    # the dangling-group-name class at the same time: every group build_files
+    # consume via packages_for (and flatpak key via flatpak_apps) must exist
+    # in the catalog.
+    if jq -e . packages.json >/dev/null; then
+        echo "packages.json parses — OK"
+    else
+        echo "packages.json is NOT valid JSON (comments break jq — notes belong in _docs)"
+        status=1
+    fi
+    while read -r group; do
+        if jq -e --arg g "${group}" '.all.include | has($g)' packages.json >/dev/null; then
+            echo "group '${group}' present — OK"
+        else
+            echo "packages.json: build_files consume group '${group}' but all.include has no such key"
+            status=1
+        fi
+    done < <(grep -rhoE 'packages_for [A-Za-z0-9_-]+' build_files | awk '{print $2}' | sort -u)
+    while read -r key; do
+        if jq -e --arg k "${key}" '.flatpak | has($k)' packages.json >/dev/null; then
+            echo "flatpak key '${key}' present — OK"
+        else
+            echo "packages.json: build_files consume flatpak key '${key}' but .flatpak has no such key"
+            status=1
+        fi
+    done < <(grep -rhoE 'flatpak_apps [A-Za-z0-9_-]+' build_files | awk '{print $2}' | sort -u)
+    echo "::endgroup::"
+
     echo "::group::bash -n — verify/ helpers + workflow shell code"
     for file in verify/*.sh .github/log-helpers.sh; do
         [ -e "$file" ] || continue
